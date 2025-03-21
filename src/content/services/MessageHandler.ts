@@ -19,6 +19,7 @@ export class MessageHandler {
    * Set up message listener
    */
   setupMessageListener(): void {
+    // Listen for messages from the browser extension system
     chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       console.log('⭐ MessageHandler: Received message:', message);
       
@@ -61,7 +62,23 @@ export class MessageHandler {
       return true; // Keep the message channel open for async response
     });
     
-    console.log('⭐ MessageHandler: Message listener set up');
+    // Also set up a custom event listener for direct in-page communication
+    document.addEventListener('engageiq:insert-comment', (event: Event) => {
+      console.log('⭐ MessageHandler: Received custom insert-comment event');
+      const customEvent = event as CustomEvent;
+      
+      if (customEvent.detail) {
+        const { comment, elementId } = customEvent.detail;
+        console.log('⭐ MessageHandler: Inserting comment via custom event', { 
+          commentLength: comment?.length,
+          elementId 
+        });
+        
+        this.commentInserter.insertComment(comment, elementId);
+      }
+    });
+    
+    console.log('⭐ MessageHandler: All message listeners set up');
   }
   
   /**

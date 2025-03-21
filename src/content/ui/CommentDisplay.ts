@@ -193,19 +193,25 @@ export class CommentDisplay implements ICommentDisplay {
     `;
     
     useButton.addEventListener('click', () => {
-      // Send message to insert comment
-      chrome.runtime.sendMessage({
-        type: 'INSERT_COMMENT',
-        payload: {
-          comment,
-          elementId: fieldId
-        }
-      }, (response) => {
-        console.log('⭐ CommentDisplay: Insert comment response:', response);
-        if (response.success) {
-          commentsUI.remove();
-        }
-      });
+      // Use the local message handler instead of sending to background script
+      try {
+        console.log('⭐ CommentDisplay: Inserting comment directly');
+        
+        // Use custom event to communicate within content script
+        const insertEvent = new CustomEvent('engageiq:insert-comment', {
+          detail: {
+            comment,
+            elementId: fieldId
+          },
+          bubbles: true
+        });
+        document.dispatchEvent(insertEvent);
+        
+        // Close the comment UI
+        commentsUI.remove();
+      } catch (error) {
+        console.error('⭐ CommentDisplay: Error inserting comment:', error);
+      }
     });
     
     buttonContainer.appendChild(copyButton);
