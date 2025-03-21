@@ -532,15 +532,25 @@ class LinkedInIntegration {
     generateButton.className = 'engageiq-generate-button';
     generateButton.setAttribute('data-field-id', this.generateFieldId(field));
     
+    // Check if the user is in dark mode
+    const isDarkMode = this.isInDarkMode();
+    console.log(`EngageIQ: User is in ${isDarkMode ? 'dark' : 'light'} mode`);
+    
     // The button style changes based on the position
     const isAboveField = buttonPosition.position.includes('top: -36px');
+    
+    // Set colors based on theme
+    const buttonBg = isDarkMode ? '#0073b1' : '#0a66c2';
+    const buttonHoverBg = isDarkMode ? '#005582' : '#004182';
+    const buttonTextColor = 'white';
+    const buttonShadow = isDarkMode ? '0 1px 3px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.12)';
     
     // Apply different styling based on position
     if (isAboveField) {
       // Pill-shaped button when positioned above the field
       generateButton.style.cssText = `
-        background-color: #0a66c2;
-        color: white;
+        background-color: ${buttonBg};
+        color: ${buttonTextColor};
         border: none;
         border-radius: 16px;
         height: 28px;
@@ -549,7 +559,7 @@ class LinkedInIntegration {
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        box-shadow: ${buttonShadow};
         transition: all 0.2s ease;
         margin: 0;
         font-size: 12px;
@@ -558,17 +568,44 @@ class LinkedInIntegration {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
       `;
       
+      // Store colors for hover handling
+      generateButton.dataset.normalBg = buttonBg;
+      generateButton.dataset.hoverBg = buttonHoverBg;
+      
       // Use text + icon for better clarity
       const iconUrl = chrome.runtime.getURL('icons/icon16.png');
       generateButton.innerHTML = `
         <img src="${iconUrl}" width="14" height="14" alt="" style="margin-right: 6px; object-fit: contain;" />
         <span>Generate Comment</span>
       `;
+      
+      // Add responsive breakpoint - show just icon on small screens
+      const mediaQuery = window.matchMedia('(max-width: 768px)');
+      const handleScreenChange = (e: MediaQueryListEvent | MediaQueryList) => {
+        if (e.matches) {
+          // Small screen - show icon only
+          generateButton.innerHTML = `<img src="${iconUrl}" width="14" height="14" alt="Generate" style="object-fit: contain;" />`;
+          generateButton.style.padding = '0 8px';
+        } else {
+          // Larger screen - show icon and text
+          generateButton.innerHTML = `
+            <img src="${iconUrl}" width="14" height="14" alt="" style="margin-right: 6px; object-fit: contain;" />
+            <span>Generate Comment</span>
+          `;
+          generateButton.style.padding = '0 12px';
+        }
+      };
+      
+      // Initial check
+      handleScreenChange(mediaQuery);
+      
+      // Listen for changes
+      mediaQuery.addEventListener('change', handleScreenChange);
     } else {
       // Round button when positioned inline with field
       generateButton.style.cssText = `
-        background-color: #0a66c2;
-        color: white;
+        background-color: ${buttonBg};
+        color: ${buttonTextColor};
         border: none;
         border-radius: 50%;
         width: 28px;
@@ -577,12 +614,16 @@ class LinkedInIntegration {
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        box-shadow: ${buttonShadow};
         transition: all 0.2s ease;
         margin: 0 4px;
         font-size: 12px;
         opacity: 0.9;
       `;
+      
+      // Store colors for hover handling
+      generateButton.dataset.normalBg = buttonBg;
+      generateButton.dataset.hoverBg = buttonHoverBg;
       
       // Just icon for circular button
       const iconUrl = chrome.runtime.getURL('icons/icon16.png');
@@ -593,14 +634,20 @@ class LinkedInIntegration {
     
     // Only add tooltip for the circular button style (not needed for labeled button)
     if (!isAboveField) {
+      // Create tooltip with theme-aware styling
       const tooltip = document.createElement('div');
       tooltip.className = 'engageiq-tooltip';
+      
+      // Adjust tooltip style based on theme
+      const tooltipBg = isDarkMode ? 'rgba(0, 0, 0, 0.9)' : 'rgba(0, 0, 0, 0.75)';
+      const tooltipShadow = isDarkMode ? '0 2px 6px rgba(0,0,0,0.3)' : '0 2px 4px rgba(0,0,0,0.1)';
+      
       tooltip.style.cssText = `
         position: absolute;
         top: -30px;
         left: 50%;
         transform: translateX(-50%);
-        background-color: rgba(0, 0, 0, 0.75);
+        background-color: ${tooltipBg};
         color: white;
         padding: 4px 8px;
         border-radius: 4px;
@@ -609,7 +656,7 @@ class LinkedInIntegration {
         opacity: 0;
         transition: opacity 0.2s;
         pointer-events: none;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: ${tooltipShadow};
       `;
       tooltip.textContent = 'Generate AI Comment';
       generateButton.appendChild(tooltip);
@@ -617,25 +664,36 @@ class LinkedInIntegration {
       // Show/hide tooltip on hover with improved animation
       generateButton.addEventListener('mouseover', () => {
         generateButton.style.transform = 'scale(1.1)';
-        generateButton.style.backgroundColor = '#004182';
+        generateButton.style.backgroundColor = generateButton.dataset.hoverBg || buttonHoverBg;
         tooltip.style.opacity = '1';
       });
       
       generateButton.addEventListener('mouseout', () => {
         generateButton.style.transform = 'scale(1)';
-        generateButton.style.backgroundColor = '#0a66c2';
+        generateButton.style.backgroundColor = generateButton.dataset.normalBg || buttonBg;
         tooltip.style.opacity = '0';
       });
     } else {
       // For labeled button, just change color on hover (no tooltip needed)
       generateButton.addEventListener('mouseover', () => {
-        generateButton.style.backgroundColor = '#004182';
+        generateButton.style.backgroundColor = generateButton.dataset.hoverBg || buttonHoverBg;
       });
       
       generateButton.addEventListener('mouseout', () => {
-        generateButton.style.backgroundColor = '#0a66c2';
+        generateButton.style.backgroundColor = generateButton.dataset.normalBg || buttonBg;
       });
     }
+    
+    // Add animation and active state for clicks
+    generateButton.addEventListener('mousedown', () => {
+      generateButton.style.transform = 'scale(0.95)';
+      generateButton.style.boxShadow = 'none';
+    });
+    
+    generateButton.addEventListener('mouseup', () => {
+      generateButton.style.transform = isAboveField ? 'scale(1)' : 'scale(1.1)';
+      generateButton.style.boxShadow = buttonShadow;
+    });
     
     generateButton.addEventListener('click', (e) => {
       e.preventDefault();
@@ -758,36 +816,77 @@ class LinkedInIntegration {
    * Handle click on generate button
    */
   handleGenerateClick(field: HTMLElement) {
-    if (this.isGenerating || !this.currentPostContent) {
+    // If already generating, return
+    if (this.isGenerating) {
+      console.log('EngageIQ: Already generating a comment, ignoring click');
       return;
+    }
+    
+    // If no post content, try to extract it again
+    if (!this.currentPostContent) {
+      console.log('EngageIQ: No post content available, attempting to extract again');
+      try {
+        this.currentPostContent = this.extractPostContent(field);
+        if (!this.currentPostContent) {
+          this.showErrorUI(field, "Couldn't determine what post you're commenting on. Please try again.");
+          return;
+        }
+      } catch (error) {
+        console.error('EngageIQ: Error extracting post content:', error);
+        this.showErrorUI(field, "Couldn't access post content. Please try again.");
+        return;
+      }
     }
     
     // Set generating state
     this.isGenerating = true;
     
+    // Vibrate device if supported (mobile feedback)
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
+    
     // Update button UI to show loading state
     const fieldId = this.generateFieldId(field);
     const button = document.querySelector(`[data-field-id="${fieldId}"]`);
+    
+    // Provide visual feedback
     if (button) {
-      // Replace icon with spinner
-      button.innerHTML = `
-        <svg class="engageiq-spinner" width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="12" cy="12" r="10" stroke="white" fill="none" stroke-width="3" stroke-dasharray="30 10" />
-        </svg>
-      `;
+      // Check if the button is the labeled version or icon version
+      const isLabeledButton = button.querySelector('span') !== null;
       
-      // Add spinning animation
-      const style = document.createElement('style');
-      style.innerHTML = `
-        .engageiq-spinner {
-          animation: engageiq-spin 1s linear infinite;
-        }
-        @keyframes engageiq-spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-      `;
-      document.head.appendChild(style);
+      if (isLabeledButton) {
+        // Update labeled button 
+        button.innerHTML = `
+          <svg class="engageiq-spinner" width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" stroke="white" fill="none" stroke-width="3" stroke-dasharray="30 10" />
+          </svg>
+          <span style="margin-left: 6px;">Generating...</span>
+        `;
+      } else {
+        // Update icon-only button
+        button.innerHTML = `
+          <svg class="engageiq-spinner" width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" stroke="white" fill="none" stroke-width="3" stroke-dasharray="30 10" />
+          </svg>
+        `;
+      }
+      
+      // Add or update spinning animation if not already present
+      if (!document.querySelector('#engageiq-spinner-style')) {
+        const style = document.createElement('style');
+        style.id = 'engageiq-spinner-style';
+        style.innerHTML = `
+          .engageiq-spinner {
+            animation: engageiq-spin 1s linear infinite;
+          }
+          @keyframes engageiq-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `;
+        document.head.appendChild(style);
+      }
       
       // Update tooltip if it exists
       const tooltip = button.querySelector('.engageiq-tooltip');
@@ -795,7 +894,13 @@ class LinkedInIntegration {
         tooltip.textContent = 'Generating...';
         (tooltip as HTMLElement).style.opacity = '1';
       }
+      
+      // Change button color to indicate busy state
+      const isDarkMode = this.isInDarkMode();
+      (button as HTMLElement).style.backgroundColor = isDarkMode ? '#006097' : '#0077b5';
     }
+    
+    console.log('EngageIQ: Sending comment generation request for post content:', this.currentPostContent);
     
     // Request comment generation from background script
     chrome.runtime.sendMessage({
@@ -810,16 +915,45 @@ class LinkedInIntegration {
     }, (response: EngageIQ.CommentGenerationResponse) => {
       this.isGenerating = false;
       
+      if (chrome.runtime.lastError) {
+        console.error('Chrome runtime error:', chrome.runtime.lastError);
+        this.showErrorUI(field, "Connection error. Please try again.");
+        return;
+      }
+      
+      if (!response) {
+        console.error('No response received from background script');
+        this.showErrorUI(field, "No response from service. Please try again.");
+        return;
+      }
+      
       if (response.error) {
-        console.error('Error generating comments:', response.error);
+        console.error('Error generating comments:', response.error, response.errorDetails || '');
         this.showErrorUI(field, response.error);
         return;
       }
       
       if (response.success && response.comments) {
+        console.log('EngageIQ: Successfully generated comments:', response.comments);
+        // Vibrate to indicate success
+        if (navigator.vibrate) {
+          navigator.vibrate([50, 50, 50]);
+        }
         this.showCommentsUI(field, response.comments);
+      } else {
+        console.error('Unknown response status:', response);
+        this.showErrorUI(field, "Unexpected response. Please try again.");
       }
     });
+    
+    // Timeout for generation after 15 seconds
+    setTimeout(() => {
+      if (this.isGenerating) {
+        console.log('EngageIQ: Generation timed out after 15 seconds');
+        this.isGenerating = false;
+        this.showErrorUI(field, "Generation is taking longer than expected. Please try again.");
+      }
+    }, 15000);
   }
   
   /**
@@ -829,76 +963,163 @@ class LinkedInIntegration {
     const fieldId = this.generateFieldId(field);
     const button = document.querySelector(`[data-field-id="${fieldId}"]`);
     if (button) {
-      // Update button to show error state
-      button.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 22C6.477 22 2 17.523 2 12C2 6.477 6.477 2 12 2C17.523 2 22 6.477 22 12C22 17.523 17.523 22 12 22ZM12 20C16.418 20 20 16.418 20 12C20 7.582 16.418 4 12 4C7.582 4 4 7.582 4 12C4 16.418 7.582 20 12 20ZM11 15H13V17H11V15ZM11 7H13V13H11V7Z" fill="white"/>
-        </svg>
-      `;
+      // Check if the button is the labeled version or icon version
+      const isLabeledButton = button.querySelector('span') !== null;
+      const isDarkMode = this.isInDarkMode();
+      
+      // Error colors based on theme
+      const errorColor = '#e53935';
+      const tooltipBgColor = isDarkMode ? '#2d2d2d' : '#fff';
+      const tooltipTextColor = isDarkMode ? '#ff7a7a' : '#d93025';
+      const tooltipBorderColor = isDarkMode ? '#444' : '#d0d0d0';
+      
+      if (isLabeledButton) {
+        // Update labeled button with error state
+        button.innerHTML = `
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 22C6.477 22 2 17.523 2 12C2 6.477 6.477 2 12 2C17.523 2 22 6.477 22 12C22 17.523 17.523 22 12 22ZM12 20C16.418 20 20 16.418 20 12C20 7.582 16.418 4 12 4C7.582 4 4 7.582 4 12C4 16.418 7.582 20 12 20ZM11 15H13V17H11V15ZM11 7H13V13H11V7Z" fill="white"/>
+          </svg>
+          <span style="margin-left: 6px;">Error</span>
+        `;
+      } else {
+        // Update icon-only button
+        button.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 22C6.477 22 2 17.523 2 12C2 6.477 6.477 2 12 2C17.523 2 22 6.477 22 12C22 17.523 17.523 22 12 22ZM12 20C16.418 20 20 16.418 20 12C20 7.582 16.418 4 12 4C7.582 4 4 7.582 4 12C4 16.418 7.582 20 12 20ZM11 15H13V17H11V15ZM11 7H13V13H11V7Z" fill="white"/>
+          </svg>
+        `;
+      }
       
       // Change button background to indicate error
-      (button as HTMLElement).style.backgroundColor = '#e53935';
+      (button as HTMLElement).style.backgroundColor = errorColor;
       
-      // Create tooltip with error
+      // Create tooltip with error - enhanced with more LinkedIn-like styling
       const tooltip = document.createElement('div');
       tooltip.className = 'engageiq-error-tooltip';
       tooltip.style.cssText = `
         position: absolute;
-        bottom: 40px;
+        bottom: ${isLabeledButton ? '36px' : '40px'};
         right: 0;
-        background-color: #fff;
-        border: 1px solid #d0d0d0;
+        background-color: ${tooltipBgColor};
+        border: 1px solid ${tooltipBorderColor};
         border-radius: 8px;
-        padding: 8px 12px;
+        padding: 12px 16px;
         font-size: 12px;
-        color: #d93025;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        max-width: 250px;
+        color: ${tooltipTextColor};
+        box-shadow: 0 4px 12px rgba(0,0,0,${isDarkMode ? '0.3' : '0.15'});
+        max-width: 280px;
         z-index: 1001;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
       `;
-      tooltip.textContent = errorMessage || 'Error generating comment';
       
-      // Add close button
-      const closeButton = document.createElement('div');
-      closeButton.style.cssText = `
-        position: absolute;
-        top: 6px;
-        right: 6px;
-        cursor: pointer;
-        font-size: 10px;
-        width: 16px;
-        height: 16px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        background: #f5f5f5;
+      // Format the error message
+      tooltip.innerHTML = `
+        <div style="display: flex; align-items: flex-start; margin-bottom: 8px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin-right: 8px; margin-top: 2px; flex-shrink: 0;">
+            <path d="M12 22C6.477 22 2 17.523 2 12C2 6.477 6.477 2 12 2C17.523 2 22 6.477 22 12C22 17.523 17.523 22 12 22ZM11 15H13V17H11V15ZM11 7H13V13H11V7Z" fill="${tooltipTextColor}"/>
+          </svg>
+          <div style="flex: 1; font-weight: 500;">${errorMessage || 'Error generating comment'}</div>
+        </div>
+        <div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 11px; opacity: 0.7;">Tap to try again</span>
+          <button class="engageiq-error-close" style="background: none; border: none; cursor: pointer; color: ${isDarkMode ? '#999' : '#666'}; padding: 0; margin: 0; font-size: 12px;">Dismiss</button>
+        </div>
       `;
-      closeButton.innerHTML = '✕';
-      closeButton.addEventListener('click', () => {
-        tooltip.remove();
-      });
-      
-      tooltip.appendChild(closeButton);
       
       // Add to parent of button
       const buttonContainer = button.closest('.engageiq-button-container');
       if (buttonContainer) {
         buttonContainer.appendChild(tooltip);
         
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
+        // Add click listener to close button
+        const closeButton = tooltip.querySelector('.engageiq-error-close');
+        if (closeButton) {
+          closeButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            tooltip.remove();
+            this.resetButton(button, isDarkMode);
+          });
+        }
+        
+        // Make the whole tooltip clickable to reset and try again
+        tooltip.addEventListener('click', () => {
           tooltip.remove();
-          // Reset button
-          const iconUrl = chrome.runtime.getURL('icons/icon16.png');
-          button.innerHTML = `
-            <img src="${iconUrl}" width="16" height="16" alt="EngageIQ" style="object-fit: contain;" />
-          `;
-          (button as HTMLElement).style.backgroundColor = '#0a66c2';
-          (button as HTMLElement).style.transform = 'scale(1)';
-        }, 5000);
+          this.resetButton(button, isDarkMode);
+          
+          // Try generation again after a short delay
+          setTimeout(() => {
+            if (field && document.contains(field)) {
+              this.handleGenerateClick(field);
+            }
+          }, 100);
+        });
+        
+        // Add entrance animation
+        tooltip.animate(
+          [
+            { opacity: 0, transform: 'translateY(8px)' },
+            { opacity: 1, transform: 'translateY(0)' }
+          ],
+          { 
+            duration: 200,
+            easing: 'ease-out'
+          }
+        );
+        
+        // Auto-remove after 8 seconds
+        setTimeout(() => {
+          // Check if tooltip still exists
+          if (document.contains(tooltip)) {
+            // Add exit animation
+            const animation = tooltip.animate(
+              [
+                { opacity: 1, transform: 'translateY(0)' },
+                { opacity: 0, transform: 'translateY(8px)' }
+              ],
+              { 
+                duration: 200,
+                easing: 'ease-in'
+              }
+            );
+            
+            animation.onfinish = () => {
+              if (document.contains(tooltip)) {
+                tooltip.remove();
+              }
+              this.resetButton(button, isDarkMode);
+            };
+          }
+        }, 8000);
       }
     }
+  }
+  
+  /**
+   * Reset button to normal state
+   */
+  private resetButton(button: Element, isDarkMode: boolean) {
+    // Restore button appearance
+    const isLabeledButton = button.querySelector('span') !== null;
+    const buttonBg = isDarkMode ? '#0073b1' : '#0a66c2';
+    
+    if (isLabeledButton) {
+      // Reset labeled button
+      const iconUrl = chrome.runtime.getURL('icons/icon16.png');
+      button.innerHTML = `
+        <img src="${iconUrl}" width="14" height="14" alt="" style="margin-right: 6px; object-fit: contain;" />
+        <span>Generate Comment</span>
+      `;
+    } else {
+      // Reset icon-only button
+      const iconUrl = chrome.runtime.getURL('icons/icon16.png');
+      button.innerHTML = `
+        <img src="${iconUrl}" width="16" height="16" alt="EngageIQ" style="object-fit: contain;" />
+      `;
+    }
+    
+    // Reset style
+    (button as HTMLElement).style.backgroundColor = buttonBg;
+    (button as HTMLElement).style.transform = 'scale(1)';
   }
   
   /**
@@ -1621,6 +1842,70 @@ class LinkedInIntegration {
    */
   handleCommentGenerated(comments: EngageIQ.CommentResponse) {
     console.log('Received generated comments:', comments);
+  }
+  
+  /**
+   * Detect if user is in dark mode
+   */
+  isInDarkMode(): boolean {
+    // Check if LinkedIn is in dark mode
+    
+    // Method 1: Check for LinkedIn's dark mode class
+    const hasLinkedInDarkClass = document.documentElement.classList.contains('theme--dark');
+    
+    // Method 2: Check computed background color of the body
+    const bodyBgColor = window.getComputedStyle(document.body).backgroundColor;
+    // Dark backgrounds typically have low RGB values
+    const isDarkBackground = this.isColorDark(bodyBgColor);
+    
+    // Method 3: Check media query
+    const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    // Method 4: Check if any main containers have dark background
+    const mainElement = document.querySelector('main');
+    let mainHasDarkBg = false;
+    
+    if (mainElement) {
+      const mainBgColor = window.getComputedStyle(mainElement).backgroundColor;
+      mainHasDarkBg = this.isColorDark(mainBgColor);
+    }
+    
+    // Log dark mode detection results for debugging
+    console.log('EngageIQ: Dark mode detection:', {
+      hasLinkedInDarkClass,
+      isDarkBackground,
+      prefersDarkScheme,
+      mainHasDarkBg
+    });
+    
+    // Give precedence to LinkedIn's specific indicators
+    if (hasLinkedInDarkClass) return true;
+    if (mainHasDarkBg) return true;
+    
+    // Fallback to general indicators
+    return isDarkBackground || prefersDarkScheme;
+  }
+  
+  /**
+   * Helper to check if a color is dark based on its RGB values
+   */
+  isColorDark(color: string): boolean {
+    // Extract RGB values using regex
+    const rgbMatch = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+    
+    if (rgbMatch) {
+      const r = parseInt(rgbMatch[1], 10);
+      const g = parseInt(rgbMatch[2], 10);
+      const b = parseInt(rgbMatch[3], 10);
+      
+      // Calculate brightness (simplified formula)
+      // Dark colors have low brightness values
+      const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+      
+      return brightness < 128; // Threshold for dark colors
+    }
+    
+    return false; // Default to light if color format is unknown
   }
   
   /**
