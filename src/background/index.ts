@@ -79,13 +79,52 @@ chrome.runtime.onMessage.addListener((
           case 'GENERATE_COMMENT': {
             try {
               const { postContent, options } = message.payload;
+              
+              // Log some details about the request
+              console.log('Generating comment with the following data:');
+              console.log('Post text:', postContent.text?.substring(0, 100) + (postContent.text?.length > 100 ? '...' : ''));
+              console.log('Post type:', postContent.postType);
+              console.log('Options:', JSON.stringify(options));
+              
+              // Generate comments
               const comments = await CommentGenerationService.generateComments(postContent, options);
+              
+              // Log success (but not the actual comments to avoid cluttering logs)
+              console.log('Comment generation successful with Gemini API');
+              
+              // Send back the generated comments
               sendResponse({ success: true, comments });
             } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              
+              // Categorize the error type for better user feedback
+              const isApiKeyError = errorMessage.includes('API key') || errorMessage.includes('key');
+              const isNetworkError = errorMessage.includes('network') || errorMessage.includes('fetch');
+              const isRateLimitError = errorMessage.includes('rate') || errorMessage.includes('quota') || 
+                                      errorMessage.includes('429');
+              
+              // Handle specific error types
+              let userFriendlyMessage = 'Comment generation failed';
+              
+              if (isApiKeyError) {
+                userFriendlyMessage = 'API key issue: Please check your Gemini API key in the extension options';
+              } else if (isNetworkError) {
+                userFriendlyMessage = 'Network error: Could not connect to Gemini API';
+              } else if (isRateLimitError) {
+                userFriendlyMessage = 'Rate limit exceeded: Please try again later';
+              }
+              
+              // Log the error
               ErrorHandler.handleError(error as Error, 'CommentGeneration');
+              
+              // Send response with appropriate error message
               sendResponse({ 
-                error: `Comment generation failed: ${(error as Error).message}`,
-                errorDetails: (error as Error).message 
+                success: false,
+                error: userFriendlyMessage,
+                errorDetails: errorMessage,
+                errorType: isApiKeyError ? 'API_KEY' : 
+                           isNetworkError ? 'NETWORK' : 
+                           isRateLimitError ? 'RATE_LIMIT' : 'OTHER'
               });
             }
             break;

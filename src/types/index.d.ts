@@ -28,8 +28,24 @@ declare namespace EngageIQ {
   interface PostContent {
     text: string;
     author?: string;
+    authorTitle?: string;
+    authorCompany?: string;
     images?: string[];
     url?: string;
+    timestamp?: string;
+    engagement?: PostEngagement;
+    postType?: 'text' | 'image' | 'article' | 'video' | 'poll' | 'document' | 'job' | 'event' | 'share';
+    hashtags?: string[];
+    mentions?: string[];
+  }
+  
+  /**
+   * Engagement metrics for a post
+   */
+  interface PostEngagement {
+    likes?: number;
+    comments?: number;
+    shares?: number;
   }
 
   /**
@@ -76,9 +92,10 @@ declare namespace EngageIQ {
   
   interface CommentGenerationResponse {
     success: boolean;
-    comments: CommentResponse;
+    comments?: CommentResponse;
     error?: string;
     errorDetails?: string;
+    errorType?: 'API_KEY' | 'NETWORK' | 'RATE_LIMIT' | 'OTHER';
   }
   
   interface ErrorResponse {

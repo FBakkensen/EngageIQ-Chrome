@@ -69,8 +69,7 @@ export class ApiKeyService {
   }
 
   /**
-   * Validates API key with Gemini API
-   * For MVP, we'll use a simple validation approach
+   * Validates API key with Gemini API by making a lightweight test request
    */
   static async validateApiKey(apiKey: string): Promise<boolean> {
     if (!apiKey || apiKey.trim().length < 10) {
@@ -78,16 +77,31 @@ export class ApiKeyService {
     }
 
     try {
-      // In a real implementation, this would make a lightweight request to the Gemini API
-      // For now, we'll just check the format and length
+      // Make a lightweight request to the Gemini API to validate the key
+      const testUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+      
+      const response = await fetch(testUrl);
+      const isValid = response.ok;
+      
+      console.log(`API key validation result: ${isValid ? 'Valid' : 'Invalid'}`);
       
       // Save validation status for future reference
-      const isValid = apiKey.length >= 20 && apiKey.includes('.'); // Simplified check
       await this.saveValidationStatus(isValid);
       
       return isValid;
     } catch (error) {
       console.error('Error validating API key:', error);
+      
+      // If there was a network error, we can't determine if the key is valid
+      // For now, fallback to a simplified format check to avoid blocking the user
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        console.log('Network error during validation, falling back to format check');
+        const isFormatValid = apiKey.length >= 20 && apiKey.includes('.');
+        await this.saveValidationStatus(isFormatValid);
+        return isFormatValid;
+      }
+      
+      await this.saveValidationStatus(false);
       return false;
     }
   }

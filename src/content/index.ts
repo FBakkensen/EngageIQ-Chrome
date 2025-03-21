@@ -826,7 +826,13 @@ class LinkedInIntegration {
     if (!this.currentPostContent) {
       console.log('EngageIQ: No post content available, attempting to extract again');
       try {
-        this.currentPostContent = this.extractPostContent(field);
+        const postElement = this.findPostElementFromCommentField(field);
+        if (postElement) {
+          this.currentPostContent = this.extractPostContent(postElement);
+        } else {
+          console.warn('EngageIQ: Could not find parent post element');
+        }
+        
         if (!this.currentPostContent) {
           this.showErrorUI(field, "Couldn't determine what post you're commenting on. Please try again.");
           return;
@@ -891,7 +897,7 @@ class LinkedInIntegration {
       // Update tooltip if it exists
       const tooltip = button.querySelector('.engageiq-tooltip');
       if (tooltip) {
-        tooltip.textContent = 'Generating...';
+        tooltip.textContent = 'Generating with Gemini...';
         (tooltip as HTMLElement).style.opacity = '1';
       }
       
@@ -902,7 +908,8 @@ class LinkedInIntegration {
     
     console.log('EngageIQ: Sending comment generation request for post content:', this.currentPostContent);
     
-    // Request comment generation from background script
+    // Request comment generation from background script with comment options
+    // In a future implementation, these options would be configurable by the user
     chrome.runtime.sendMessage({
       type: 'GENERATE_COMMENT',
       payload: {
@@ -927,14 +934,27 @@ class LinkedInIntegration {
         return;
       }
       
-      if (response.error) {
+      if (!response.success || response.error) {
         console.error('Error generating comments:', response.error, response.errorDetails || '');
-        this.showErrorUI(field, response.error);
+        
+        // Determine the appropriate user-friendly error message based on error type
+        let errorMessage = response.error || "Failed to generate comments";
+        
+        // Check for specific error types
+        if (response.errorType === 'API_KEY') {
+          errorMessage = "API key not configured. Please set up your Gemini API key in extension options.";
+        } else if (response.errorType === 'NETWORK') {
+          errorMessage = "Network error. Please check your internet connection and try again.";
+        } else if (response.errorType === 'RATE_LIMIT') {
+          errorMessage = "API rate limit exceeded. Please wait a moment and try again.";
+        }
+        
+        this.showErrorUI(field, errorMessage);
         return;
       }
       
       if (response.success && response.comments) {
-        console.log('EngageIQ: Successfully generated comments:', response.comments);
+        console.log('EngageIQ: Successfully generated comments with Gemini API');
         // Vibrate to indicate success
         if (navigator.vibrate) {
           navigator.vibrate([50, 50, 50]);
@@ -946,14 +966,46 @@ class LinkedInIntegration {
       }
     });
     
-    // Timeout for generation after 15 seconds
+    // Extend timeout for generation to 20 seconds due to real API calls
     setTimeout(() => {
       if (this.isGenerating) {
-        console.log('EngageIQ: Generation timed out after 15 seconds');
+        console.log('EngageIQ: Generation timed out after 20 seconds');
         this.isGenerating = false;
-        this.showErrorUI(field, "Generation is taking longer than expected. Please try again.");
+        this.showErrorUI(field, "The Gemini API is taking longer than expected. Please try again later.");
       }
-    }, 15000);
+    }, 20000);
+  }
+  
+  /**
+   * Find parent post element from a comment field
+   */
+  findPostElementFromCommentField(field: HTMLElement): HTMLElement | null {
+    // Search up through parent elements to find post container
+    const postSelectors = [
+      '.feed-shared-update-v2',
+      '.update-components-update',
+      'article.feed-shared-update',
+      '.occludable-update',
+      'article.ember-view',
+      '[data-urn]',
+      'div[data-id]'
+    ];
+    
+    for (const selector of postSelectors) {
+      const post = field.closest(selector);
+      if (post) {
+        return post as HTMLElement;
+      }
+    }
+    
+    // Fallback: look for post ID data attribute in parent elements
+    const markedPost = field.closest('[data-engageiq-post-id]');
+    if (markedPost) {
+      return markedPost as HTMLElement;
+    }
+    
+    console.warn('EngageIQ: Could not find parent post element for comment field');
+    return null;
   }
   
   /**
@@ -1623,6 +1675,7 @@ class LinkedInIntegration {
   
   /**
    * Extract post content for context
+   * Enhanced version with better content extraction for various LinkedIn post types
    */
   extractPostContent(element: HTMLElement): EngageIQ.PostContent | null {
     // Determine if we're using a post element or a comment field
@@ -1659,26 +1712,132 @@ class LinkedInIntegration {
     console.log('EngageIQ: Found post container:', postContainer);
     console.log('EngageIQ: Post container classes:', postContainer.className);
     
-    // Extract post text
-    const postTextElements = postContainer.querySelectorAll('.feed-shared-update-v2__description-wrapper, .feed-shared-text');
+    // Initialize post content
+    const postContent: EngageIQ.PostContent = {
+      text: '',
+      author: 'LinkedIn User'
+    };
+    
+    // STEP 1: Determine post type
+    postContent.postType = this.determinePostType(postContainer);
+    console.log(`EngageIQ: Detected post type: ${postContent.postType}`);
+    
+    // STEP 2: Extract post text content based on post type and container
+    postContent.text = this.extractPostText(postContainer, postContent.postType);
+    
+    // STEP 3: Extract author information
+    const authorInfo = this.extractAuthorInfo(postContainer);
+    postContent.author = authorInfo.name;
+    postContent.authorTitle = authorInfo.title;
+    postContent.authorCompany = authorInfo.company;
+    
+    // STEP 4: Extract media content (images, videos, etc.)
+    postContent.images = this.extractMediaContent(postContainer, postContent.postType);
+    
+    // STEP 5: Extract timestamp
+    postContent.timestamp = this.extractTimestamp(postContainer);
+    
+    // STEP 6: Extract engagement metrics
+    postContent.engagement = this.extractEngagementMetrics(postContainer);
+    
+    // STEP 7: Extract URL
+    postContent.url = this.extractPostUrl(postContainer);
+    
+    // STEP 8: Extract hashtags and mentions
+    const { hashtags, mentions } = this.extractHashtagsAndMentions(postContent.text);
+    postContent.hashtags = hashtags.length > 0 ? hashtags : undefined;
+    postContent.mentions = mentions.length > 0 ? mentions : undefined;
+    
+    console.log('EngageIQ: Extracted post content:', postContent);
+    
+    return postContent;
+  }
+  
+  /**
+   * Determine the type of LinkedIn post
+   */
+  private determinePostType(postContainer: HTMLElement): EngageIQ.PostContent['postType'] {
+    // Check for image post
+    const hasImages = !!postContainer.querySelector('.feed-shared-image, .update-components-image img');
+    
+    // Check for article post
+    const hasArticle = !!postContainer.querySelector('.feed-shared-article, .article-card, [data-test-id*="article"]');
+    
+    // Check for video post
+    const hasVideo = !!postContainer.querySelector('video, .feed-shared-video, [data-test-id*="video"]');
+    
+    // Check for document post
+    const hasDocument = !!postContainer.querySelector('.feed-shared-document, [data-test-id*="document"]');
+    
+    // Check for poll post
+    const hasPoll = !!postContainer.querySelector('.feed-shared-poll, [data-test-id*="poll"]');
+    
+    // Check for job post
+    const hasJob = !!postContainer.querySelector('.job-card, .job-view-layout, [data-test-id*="job"]');
+    
+    // Check for event post
+    const hasEvent = !!postContainer.querySelector('.event-card, [data-test-id*="event"]');
+    
+    // Check for shared post
+    const isShared = !!postContainer.querySelector('.feed-shared-reshared-update, [data-test-id*="reshare"]');
+    
+    // Determine the post type based on the checks
+    if (hasVideo) return 'video';
+    if (hasArticle) return 'article';
+    if (hasDocument) return 'document';
+    if (hasPoll) return 'poll';
+    if (hasJob) return 'job';
+    if (hasEvent) return 'event';
+    if (isShared) return 'share';
+    if (hasImages) return 'image';
+    
+    // Default to text post
+    return 'text';
+  }
+  
+  /**
+   * Extract post text based on post type and container
+   */
+  private extractPostText(postContainer: HTMLElement, postType: EngageIQ.PostContent['postType']): string {
     let postText = '';
     
-    console.log(`EngageIQ: Found ${postTextElements.length} text elements in the post`);
+    // LinkedIn has different selectors for text content based on post type
+    const selectors = [
+      // Common selectors
+      '.feed-shared-update-v2__description-wrapper',
+      '.feed-shared-text',
+      '.update-components-text',
+      
+      // Post type specific selectors
+      ...(postType === 'article' ? ['.feed-shared-article__description', '.article-card__description'] : []),
+      ...(postType === 'image' ? ['.feed-shared-image__description'] : []),
+      ...(postType === 'video' ? ['.feed-shared-video__description'] : []),
+      ...(postType === 'document' ? ['.feed-shared-document__description'] : []),
+      ...(postType === 'poll' ? ['.feed-shared-poll__question'] : []),
+      ...(postType === 'job' ? ['.job-card__description', '.job-view-layout__description'] : []),
+      ...(postType === 'event' ? ['.event-card__description'] : []),
+      ...(postType === 'share' ? ['.feed-shared-reshared-update__description'] : [])
+    ];
     
-    postTextElements.forEach((element, index) => {
-      const text = element.textContent?.trim();
-      if (text) {
-        console.log(`EngageIQ: Text element ${index}:`, text.substring(0, 50) + (text.length > 50 ? '...' : ''));
-        postText += text + ' ';
-      }
-    });
+    // Try all selectors
+    for (const selector of selectors) {
+      const elements = postContainer.querySelectorAll(selector);
+      elements.forEach(element => {
+        const text = element.textContent?.trim();
+        if (text) {
+          postText += text + ' ';
+        }
+      });
+    }
     
-    // If no post text found, try more general selectors
+    // If no text found with specific selectors, try more general approach
     if (!postText) {
       console.log('EngageIQ: No post text found with primary selectors, trying alternative selectors');
-      const alternativeTextElements = postContainer.querySelectorAll('p, div[dir="ltr"], .update-components-text');
-      alternativeTextElements.forEach((element, index) => {
-        // Skip elements that are likely not part of the main post content
+      
+      // First try basic paragraph and div elements with direction attributes (common in LinkedIn)
+      const basicTextElements = postContainer.querySelectorAll('p, div[dir="ltr"], div[dir="rtl"], div.update-components-text');
+      basicTextElements.forEach(element => {
+        // Skip certain elements that are not likely to be main content
         if (element.closest('.comments-comment-item') || 
             element.closest('form') ||
             element.getAttribute('data-engageiq-ui') === 'true') {
@@ -1687,67 +1846,376 @@ class LinkedInIntegration {
         
         const text = element.textContent?.trim();
         if (text) {
-          console.log(`EngageIQ: Alternative text element ${index}:`, text.substring(0, 50) + (text.length > 50 ? '...' : ''));
           postText += text + ' ';
+        }
+      });
+      
+      // If still no text, try to get any text content from the post avoiding UI elements
+      if (!postText) {
+        // Get all text nodes, excluding certain UI elements
+        const textNodes = this.getTextNodes(postContainer);
+        textNodes.forEach(node => {
+          const text = node.textContent?.trim();
+          if (text && text.length > 10) { // Only include substantial text
+            postText += text + ' ';
+          }
+        });
+      }
+    }
+    
+    // Clean up text - remove excess whitespace
+    postText = postText.trim().replace(/\s+/g, ' ');
+    
+    return postText || 'LinkedIn post';
+  }
+  
+  /**
+   * Get all text nodes within an element, excluding scripts and style elements
+   */
+  private getTextNodes(node: Node): Text[] {
+    const textNodes: Text[] = [];
+    
+    // Skip certain elements that are likely not main content
+    if (node.nodeType === Node.ELEMENT_NODE) {
+      const element = node as HTMLElement;
+      if (element.tagName === 'SCRIPT' || 
+          element.tagName === 'STYLE' || 
+          element.getAttribute('data-engageiq-ui') === 'true' ||
+          element.classList.contains('comments-comment-item') ||
+          element.classList.contains('comments-comment-box')) {
+        return textNodes;
+      }
+    }
+    
+    // Add text nodes
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent?.trim();
+      if (text && text.length > 0) {
+        textNodes.push(node as Text);
+      }
+    }
+    
+    // Process child nodes
+    const childNodes = node.childNodes;
+    for (let i = 0; i < childNodes.length; i++) {
+      textNodes.push(...this.getTextNodes(childNodes[i]));
+    }
+    
+    return textNodes;
+  }
+  
+  /**
+   * Extract author information from post container
+   */
+  private extractAuthorInfo(postContainer: HTMLElement): { name: string; title?: string; company?: string } {
+    // Default values
+    const authorInfo: { name: string; title?: string; company?: string } = {
+      name: 'LinkedIn User'
+    };
+    
+    // Try to find author name using various selectors
+    const authorSelectors = [
+      '.feed-shared-actor__name', 
+      '.update-components-actor__name',
+      '.actor-name',
+      '.article-author-name',
+      '.profile-card-one-to-one__profile-link'
+    ];
+    
+    for (const selector of authorSelectors) {
+      const elements = postContainer.querySelectorAll(selector);
+      if (elements.length > 0) {
+        const name = elements[0].textContent?.trim();
+        if (name) {
+          authorInfo.name = name;
+          break;
+        }
+      }
+    }
+    
+    // If still no author, try links with profile URLs
+    if (authorInfo.name === 'LinkedIn User') {
+      const profileLinks = postContainer.querySelectorAll('a[href*="/in/"]');
+      if (profileLinks.length > 0) {
+        const name = profileLinks[0].textContent?.trim();
+        if (name) {
+          authorInfo.name = name;
+        }
+      }
+    }
+    
+    // Try to extract author title and company
+    const titleSelectors = [
+      '.feed-shared-actor__description', 
+      '.update-components-actor__description',
+      '.actor-subtitle'
+    ];
+    
+    for (const selector of titleSelectors) {
+      const elements = postContainer.querySelectorAll(selector);
+      if (elements.length > 0) {
+        const fullTitle = elements[0].textContent?.trim();
+        if (fullTitle) {
+          // LinkedIn often uses format "Title at Company"
+          const titleParts = fullTitle.split(' at ');
+          if (titleParts.length >= 2) {
+            authorInfo.title = titleParts[0].trim();
+            authorInfo.company = titleParts[1].trim();
+          } else {
+            authorInfo.title = fullTitle;
+          }
+          break;
+        }
+      }
+    }
+    
+    return authorInfo;
+  }
+  
+  /**
+   * Extract media content (images, videos) from post
+   */
+  private extractMediaContent(postContainer: HTMLElement, postType?: EngageIQ.PostContent['postType']): string[] | undefined {
+    const mediaUrls: string[] = [];
+    
+    // Extract images
+    const imageSelectors = [
+      'img.feed-shared-image',
+      '.update-components-image img',
+      '.feed-shared-article__preview-image',
+      '.feed-shared-update__image',
+      '.feed-shared-mini-article-list-item__image',
+      '.article-card__image'
+    ];
+    
+    for (const selector of imageSelectors) {
+      const images = postContainer.querySelectorAll(selector);
+      images.forEach(img => {
+        const src = (img as HTMLImageElement).src;
+        if (src && !src.includes('data:image') && !mediaUrls.includes(src)) {
+          mediaUrls.push(src);
         }
       });
     }
     
-    // Extract author name
-    let authorName = 'LinkedIn User';
-    const authorElements = postContainer.querySelectorAll('.feed-shared-actor__name, .update-components-actor__name');
+    // Extract poster images from videos
+    if (postType === 'video') {
+      const videoElements = postContainer.querySelectorAll('video');
+      videoElements.forEach(video => {
+        // Try to get poster image
+        const poster = video.getAttribute('poster');
+        if (poster && !mediaUrls.includes(poster)) {
+          mediaUrls.push(poster);
+        }
+        
+        // Try to get thumbnail
+        const thumbnail = video.getAttribute('data-thumbnail');
+        if (thumbnail && !mediaUrls.includes(thumbnail)) {
+          mediaUrls.push(thumbnail);
+        }
+      });
+    }
     
-    console.log(`EngageIQ: Found ${authorElements.length} author elements`);
+    return mediaUrls.length > 0 ? mediaUrls : undefined;
+  }
+  
+  /**
+   * Extract timestamp from post
+   */
+  private extractTimestamp(postContainer: HTMLElement): string | undefined {
+    // Try to find timestamp
+    const timeSelectors = [
+      '.feed-shared-actor__sub-description time',
+      '.update-components-actor__sub-description time',
+      'time.feed-shared-time-ago',
+      'time.update-components-time-ago',
+      'time[datetime]'
+    ];
     
-    if (authorElements.length > 0) {
-      authorName = authorElements[0].textContent?.trim() || authorName;
-      console.log('EngageIQ: Author name:', authorName);
-    } else {
-      // Try alternative author selectors
-      const alternativeAuthorElements = postContainer.querySelectorAll('a[href*="/in/"], .update-components-actor');
-      if (alternativeAuthorElements.length > 0) {
-        const potentialAuthor = alternativeAuthorElements[0].textContent?.trim();
-        if (potentialAuthor) {
-          authorName = potentialAuthor;
-          console.log('EngageIQ: Author name from alternative selector:', authorName);
+    for (const selector of timeSelectors) {
+      const timeElements = postContainer.querySelectorAll(selector);
+      if (timeElements.length > 0) {
+        // First try to get the datetime attribute
+        const datetime = timeElements[0].getAttribute('datetime');
+        if (datetime) {
+          return datetime;
+        }
+        
+        // Fall back to text content
+        const timeText = timeElements[0].textContent?.trim();
+        if (timeText) {
+          return timeText;
         }
       }
     }
     
-    // Check for image content
-    const imageElements = postContainer.querySelectorAll('img.feed-shared-image, .update-components-image img');
-    const images: string[] = [];
-    
-    console.log(`EngageIQ: Found ${imageElements.length} image elements`);
-    
-    imageElements.forEach((img, index) => {
-      const src = (img as HTMLImageElement).src;
-      if (src) {
-        console.log(`EngageIQ: Image ${index} source:`, src.substring(0, 50) + (src.length > 50 ? '...' : ''));
-        images.push(src);
+    // If no timestamp found, try looking for the time text directly
+    const relativeTimeTextElements = postContainer.querySelectorAll('.feed-shared-actor__sub-description, .update-components-actor__sub-description');
+    for (const element of relativeTimeTextElements) {
+      const text = element.textContent?.trim();
+      if (text && /(\d+[smhd]|\d+ (second|minute|hour|day|week|month|year)s?)/.test(text)) {
+        return text;
       }
-    });
-    
-    // Get post URL if possible
-    let url = '';
-    const linkElements = postContainer.querySelectorAll('.feed-shared-control-menu__trigger, .update-components-action-menu');
-    if (linkElements.length > 0) {
-      console.log('EngageIQ: Found potential link element for post URL');
-      // The post ID might be in a related attribute
-      url = window.location.href; // Fallback to current page URL
-      console.log('EngageIQ: Using current page URL:', url);
     }
     
-    const postContent = {
-      text: postText || 'LinkedIn post',
-      author: authorName,
-      images: images.length > 0 ? images : undefined,
-      url: url || undefined
-    };
+    return undefined;
+  }
+  
+  /**
+   * Extract engagement metrics (likes, comments, shares)
+   */
+  private extractEngagementMetrics(postContainer: HTMLElement): EngageIQ.PostEngagement | undefined {
+    const engagement: EngageIQ.PostEngagement = {};
     
-    console.log('EngageIQ: Extracted post content:', postContent);
+    // Get social counts container
+    const socialCountsSelectors = [
+      '.social-details-social-counts',
+      '.update-components-social-activity',
+      '.social-action-counts'
+    ];
     
-    return postContent;
+    let socialCountsContainer: HTMLElement | null = null;
+    
+    for (const selector of socialCountsSelectors) {
+      const elements = postContainer.querySelectorAll(selector);
+      if (elements.length > 0) {
+        socialCountsContainer = elements[0] as HTMLElement;
+        break;
+      }
+    }
+    
+    if (!socialCountsContainer) {
+      return undefined;
+    }
+    
+    // Extract like count
+    const likeElements = socialCountsContainer.querySelectorAll('[data-control-name="likes_count"], [data-control-name="like_count"], [aria-label*="like"], [aria-label*="reaction"]');
+    if (likeElements.length > 0) {
+      const likeText = likeElements[0].textContent?.trim();
+      if (likeText) {
+        // Extract numbers from text
+        const likeMatch = likeText.match(/(\d+)/);
+        if (likeMatch) {
+          engagement.likes = parseInt(likeMatch[1], 10);
+        }
+      }
+    }
+    
+    // Extract comment count
+    const commentElements = socialCountsContainer.querySelectorAll('[data-control-name="comments_count"], [aria-label*="comment"]');
+    if (commentElements.length > 0) {
+      const commentText = commentElements[0].textContent?.trim();
+      if (commentText) {
+        // Extract numbers from text
+        const commentMatch = commentText.match(/(\d+)/);
+        if (commentMatch) {
+          engagement.comments = parseInt(commentMatch[1], 10);
+        }
+      }
+    }
+    
+    // Extract share count
+    const shareElements = socialCountsContainer.querySelectorAll('[data-control-name="shares_count"], [aria-label*="share"]');
+    if (shareElements.length > 0) {
+      const shareText = shareElements[0].textContent?.trim();
+      if (shareText) {
+        // Extract numbers from text
+        const shareMatch = shareText.match(/(\d+)/);
+        if (shareMatch) {
+          engagement.shares = parseInt(shareMatch[1], 10);
+        }
+      }
+    }
+    
+    // Only return engagement if we found any metrics
+    return Object.keys(engagement).length > 0 ? engagement : undefined;
+  }
+  
+  /**
+   * Extract post URL
+   */
+  private extractPostUrl(postContainer: HTMLElement): string | undefined {
+    // Try to find a share link
+    const shareSelectors = [
+      'a[data-control-name="copy_linkedin"]',
+      'button[aria-label*="share"]',
+      '.feed-shared-control-menu__trigger'
+    ];
+    
+    for (const selector of shareSelectors) {
+      const elements = postContainer.querySelectorAll(selector);
+      if (elements.length > 0) {
+        // Check for post ID in data attributes
+        const element = elements[0] as HTMLElement;
+        const dataId = 
+          element.getAttribute('data-urn') || 
+          element.getAttribute('data-id') || 
+          element.getAttribute('data-activity-urn');
+        
+        if (dataId) {
+          // Could construct LinkedIn post URL, but it's complex
+          return window.location.href;
+        }
+      }
+    }
+    
+    // Find any post permalink
+    const permalinkSelectors = [
+      'a.feed-shared-permalink',
+      'a[data-control-name="permalink"]'
+    ];
+    
+    for (const selector of permalinkSelectors) {
+      const elements = postContainer.querySelectorAll(selector);
+      if (elements.length > 0) {
+        const href = (elements[0] as HTMLAnchorElement).href;
+        if (href) {
+          return href;
+        }
+      }
+    }
+    
+    // Finally, check the post container itself for an ID
+    const postId = 
+      postContainer.getAttribute('data-urn') || 
+      postContainer.getAttribute('data-id') || 
+      postContainer.getAttribute('data-activity-urn');
+    
+    if (postId) {
+      return window.location.href;
+    }
+    
+    return undefined;
+  }
+  
+  /**
+   * Extract hashtags and mentions from post text
+   */
+  private extractHashtagsAndMentions(text: string): { hashtags: string[]; mentions: string[] } {
+    const hashtags: string[] = [];
+    const mentions: string[] = [];
+    
+    // Find hashtags (format: #hashtag)
+    const hashtagRegex = /#([a-zA-Z0-9_]+)/g;
+    let hashtagMatch;
+    while ((hashtagMatch = hashtagRegex.exec(text)) !== null) {
+      const hashtag = hashtagMatch[1];
+      if (!hashtags.includes(hashtag)) {
+        hashtags.push(hashtag);
+      }
+    }
+    
+    // Find mentions (format: @mention)
+    const mentionRegex = /@([a-zA-Z0-9_]+)/g;
+    let mentionMatch;
+    while ((mentionMatch = mentionRegex.exec(text)) !== null) {
+      const mention = mentionMatch[1];
+      if (!mentions.includes(mention)) {
+        mentions.push(mention);
+      }
+    }
+    
+    return { hashtags, mentions };
   }
   
   /**

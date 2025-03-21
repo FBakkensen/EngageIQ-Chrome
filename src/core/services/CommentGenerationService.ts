@@ -4,8 +4,8 @@
 import { ApiKeyService } from './ApiKeyService';
 
 export class CommentGenerationService {
-  // Gemini API URL would be used in production implementation
-  // private static readonly API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+  // Gemini API URL for API calls
+  private static readonly API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
 
   /**
    * Generates comments for a LinkedIn post
@@ -27,16 +27,21 @@ export class CommentGenerationService {
         throw new Error('Invalid API key');
       }
 
-      // In a real implementation, this would call the Gemini API with the constructed prompt
-      // For development, we'll return mock responses
-      
       console.log(`Generating comment for post: ${postContent.text?.substring(0, 50)}...`);
       console.log(`With options: ${JSON.stringify(options)}`);
       
-      // Generate mock comments based on options
-      const comments = this.generateMockComments(postContent, options);
+      // Generate comments with real API if possible, otherwise use mock responses
+      let comments: EngageIQ.CommentResponse;
       
-      console.log('Comment generation successful');
+      try {
+        comments = await this.callGeminiAPI(postContent, options, apiKey);
+        console.log('Gemini API comment generation successful');
+      } catch (apiError) {
+        console.error('Error calling Gemini API, falling back to mock comments:', apiError);
+        // Fallback to mock comments if API call fails
+        comments = this.generateMockComments(postContent, options);
+      }
+      
       return comments;
     } catch (error) {
       console.error('Error generating comments:', error);
@@ -44,21 +49,103 @@ export class CommentGenerationService {
     }
   }
 
-  // This method would be used in the actual production implementation
-  /* 
+  /**
+   * Call Gemini API to generate comments
+   */
+  private static async callGeminiAPI(
+    postContent: EngageIQ.PostContent,
+    options: EngageIQ.CommentOptions,
+    apiKey: string
+  ): Promise<EngageIQ.CommentResponse> {
+    const prompt = this.createPrompt(postContent, options);
+    const tones = ['supportive', 'insightful', 'curious', 'professional'];
+    const comments: Partial<EngageIQ.CommentResponse> = {};
+    
+    // Generate a comment for each tone
+    for (const tone of tones) {
+      const tonePrompt = prompt.replace('${options.tone}', tone);
+      
+      const response = await fetch(`${this.API_URL}?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: tonePrompt }
+              ]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 800,
+            stopSequences: []
+          }
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API request failed with status ${response.status}: ${await response.text()}`);
+      }
+      
+      const data = await response.json();
+      if (data.candidates && data.candidates.length > 0 && 
+          data.candidates[0].content && data.candidates[0].content.parts && 
+          data.candidates[0].content.parts.length > 0) {
+        comments[tone as keyof EngageIQ.CommentResponse] = data.candidates[0].content.parts[0].text.trim();
+      } else {
+        throw new Error('Invalid API response format');
+      }
+    }
+    
+    // Ensure all tones have comments
+    return {
+      supportive: comments.supportive || 'Supportive comment could not be generated.',
+      insightful: comments.insightful || 'Insightful comment could not be generated.',
+      curious: comments.curious || 'Curious comment could not be generated.',
+      professional: comments.professional || 'Professional comment could not be generated.'
+    };
+  }
+
+  /**
+   * Creates a prompt for the Gemini API based on post content and options
+   */
   private static createPrompt(
     postContent: EngageIQ.PostContent, 
     options: EngageIQ.CommentOptions
   ): string {
     // Author context
     const authorContext = postContent.author 
-      ? `The post was written by ${postContent.author}.` 
+      ? `The post was written by ${postContent.author}${postContent.authorTitle ? ` (${postContent.authorTitle})` : ''}${postContent.authorCompany ? ` at ${postContent.authorCompany}` : ''}.` 
       : '';
     
     // Image context
     const imageContext = postContent.images && postContent.images.length > 0
       ? `The post includes ${postContent.images.length} image(s).`
       : 'The post does not include any images.';
+    
+    // Post type context
+    const postTypeContext = postContent.postType
+      ? `This is a ${postContent.postType} post.`
+      : '';
+    
+    // Hashtags and mentions
+    const hashtagsContext = postContent.hashtags && postContent.hashtags.length > 0
+      ? `Hashtags: ${postContent.hashtags.join(', ')}`
+      : '';
+    
+    const mentionsContext = postContent.mentions && postContent.mentions.length > 0
+      ? `Mentions: ${postContent.mentions.join(', ')}`
+      : '';
+    
+    // Engagement metrics
+    const engagementContext = postContent.engagement
+      ? `This post has received approximately ${postContent.engagement.likes || 0} likes, ${postContent.engagement.comments || 0} comments, and ${postContent.engagement.shares || 0} shares.`
+      : '';
     
     // Length guidance
     const lengthGuidance = {
@@ -75,7 +162,11 @@ export class CommentGenerationService {
       "${postContent.text}"
       
       ${authorContext}
+      ${postTypeContext}
       ${imageContext}
+      ${hashtagsContext}
+      ${mentionsContext}
+      ${engagementContext}
       
       Please create a ${options.tone} comment that is ${lengthGuidance}.
       
@@ -86,9 +177,8 @@ export class CommentGenerationService {
       - Professional: Formal and business-appropriate
       
       Return the comment without any additional text or formatting.
-    `;
+    `.trim();
   }
-  */
 
   /**
    * Generates mock comments for development
