@@ -111,7 +111,30 @@ class LinkedInIntegration {
       this.scanForLinkedInPosts();
     }, 1000));
     
-    console.log('Mutation observer and scroll listener set up');
+    // Watch for LinkedIn's view changes that might trigger new content
+    window.addEventListener('pushstate', this.debounce(() => {
+      console.log('EngageIQ: Navigation detected (pushstate), scanning for new content');
+      setTimeout(() => {
+        this.scanForLinkedInPosts();
+        this.scanForCommentFields();
+      }, 1000); // Wait for the DOM to update
+    }, 500));
+    
+    // Also listen for click events on LinkedIn's navigation items that don't trigger pushstate
+    document.addEventListener('click', this.debounce((e) => {
+      const target = e.target as HTMLElement;
+      const navItem = target.closest('a[href^="/"], button[data-control-name]');
+      
+      if (navItem) {
+        console.log('EngageIQ: Navigation action detected, scheduling scan');
+        setTimeout(() => {
+          this.scanForLinkedInPosts();
+          this.scanForCommentFields();
+        }, 1500); // Wait longer for navigation to complete
+      }
+    }, 500));
+    
+    console.log('Mutation observer and event listeners set up');
   }
   
   /**
@@ -123,10 +146,13 @@ class LinkedInIntegration {
     
     // Feed comment fields (most common)
     const feedCommentSelectors = [
-      // Main feed comment input field
+      // Main feed comment input field 
       '.comments-comment-box__form',
-      // Comment input field with content editable
+      // Comment input field with content editable - more specific
       '[contenteditable="true"][aria-label*="comment"]',
+      '[contenteditable="true"][aria-label*="Add a comment"]',
+      '[contenteditable="true"][aria-label*="Leave a comment"]',
+      '[contenteditable="true"][aria-label*="Reply"]',
       // Alternative comment field structure
       '.comments-comment-texteditor__contenteditable',
       // Post update comment field
@@ -134,12 +160,19 @@ class LinkedInIntegration {
       // Newer LinkedIn comment fields
       '.comments-comment-box [contenteditable="true"]',
       '.comments-comment-texteditor [contenteditable="true"]',
+      // Comment form identifiers
+      'form.comments-comment-box__form [contenteditable="true"]',
+      // Language-agnostic selectors (works across LinkedIn locales)
+      'div[role="textbox"][contenteditable="true"]',
       // Even broader matches for contenteditable areas in likely comment areas
       '.comments-comment-box textarea',
       '.artdeco-text-input--input'
     ];
     
     console.log('EngageIQ: Looking for comment fields with selectors:', feedCommentSelectors.join(', '));
+    
+    // Track newly found fields in this scan
+    let newFieldsFound = 0;
     
     // Scan for all potential comment fields
     feedCommentSelectors.forEach(selector => {
@@ -162,9 +195,15 @@ class LinkedInIntegration {
           // Check element attributes
           (htmlField.getAttribute('aria-label')?.toLowerCase().includes('comment') ||
            htmlField.getAttribute('placeholder')?.toLowerCase().includes('comment') ||
+           htmlField.getAttribute('aria-label')?.toLowerCase().includes('reply') ||
+           // Check for role="textbox" which LinkedIn uses for comment inputs
+           htmlField.getAttribute('role') === 'textbox' ||
            // Check parent elements for comment-related classes
            htmlField.closest('.comments-comment-box') ||
+           htmlField.closest('.comments-comment-texteditor') ||
            htmlField.closest('[data-control-name*="comment"]') ||
+           // Check if the field is part of a post's comment section
+           this.isFieldInCommentSection(htmlField) ||
            // Check if inside a form that looks like a comment form
            htmlField.closest('form.comments-comment-box__form'));
            
@@ -175,33 +214,121 @@ class LinkedInIntegration {
         
         this.setupCommentField(htmlField);
         this.processedFields.add(htmlField);
+        newFieldsFound++;
       });
     });
     
-    // If no fields found with specific selectors, try a more aggressive approach
-    if (this.processedFields.size === 0) {
-      console.log('EngageIQ: No comment fields found with specific selectors, trying broader approach');
+    // If no new fields found with specific selectors, try a more aggressive approach
+    if (newFieldsFound === 0) {
+      console.log('EngageIQ: No new comment fields found with specific selectors, trying broader approach');
       
-      // Look for any contenteditable near comments sections
-      const commentSections = document.querySelectorAll('.comments-comments-list, [data-test-id*="comments-list"]');
-      console.log(`EngageIQ: Found ${commentSections.length} comment sections`);
+      // Try two approaches for finding comment sections
       
-      commentSections.forEach((section, index) => {
-        const editableFields = section.querySelectorAll('[contenteditable="true"], textarea');
-        console.log(`EngageIQ: Found ${editableFields.length} editable fields in comment section ${index}`);
+      // 1. Look through detected posts for comment fields
+      const posts = document.querySelectorAll('[data-engageiq-post-id]');
+      console.log(`EngageIQ: Searching for comment fields in ${posts.length} detected posts`);
+      
+      posts.forEach((post, postIndex) => {
+        // Look for comment sections within the post
+        const commentSections = post.querySelectorAll(
+          '.comments-comments-list, .comments-container, [data-test-id*="comments-list"]'
+        );
         
-        editableFields.forEach(field => {
-          const htmlField = field as HTMLElement;
-          if (!this.processedFields.has(htmlField)) {
-            console.log('EngageIQ: Processing comment field from broader search:', htmlField);
-            this.setupCommentField(htmlField);
-            this.processedFields.add(htmlField);
+        if (commentSections.length > 0) {
+          console.log(`EngageIQ: Found ${commentSections.length} comment sections in post ${postIndex}`);
+          
+          // For each comment section, look for comment input fields
+          commentSections.forEach((section) => {
+            const editableFields = section.querySelectorAll('[contenteditable="true"], textarea, div[role="textbox"]');
+            editableFields.forEach(field => {
+              const htmlField = field as HTMLElement;
+              if (!this.processedFields.has(htmlField)) {
+                console.log('EngageIQ: Processing comment field from post search:', htmlField);
+                this.setupCommentField(htmlField);
+                this.processedFields.add(htmlField);
+                newFieldsFound++;
+              }
+            });
+          });
+        }
+        
+        // Also look for comment buttons that might reveal comment fields when clicked
+        const commentButtons = post.querySelectorAll(
+          '[data-control-name*="comment"], button[aria-label*="comment"], .comment-button'
+        );
+        
+        console.log(`EngageIQ: Found ${commentButtons.length} comment buttons in post ${postIndex}`);
+        
+        // Set up observers for these buttons to detect when comment fields appear
+        commentButtons.forEach(button => {
+          // Only set up if not already processed
+          if (!(button as HTMLElement).hasAttribute('data-engageiq-observed')) {
+            (button as HTMLElement).setAttribute('data-engageiq-observed', 'true');
+            
+            // Add click listener to scan for fields after button click
+            button.addEventListener('click', () => {
+              console.log('EngageIQ: Comment button clicked, scanning for comment fields');
+              // Wait for the comment field to appear
+              setTimeout(() => this.scanForCommentFields(), 500);
+            });
           }
         });
       });
+      
+      // 2. Standard approach - look for any comment sections across the page
+      if (newFieldsFound === 0) {
+        // Look for any contenteditable near comments sections
+        const commentSections = document.querySelectorAll(
+          '.comments-comments-list, .comments-container, [data-test-id*="comments-list"]'
+        );
+        console.log(`EngageIQ: Found ${commentSections.length} comment sections in page-wide search`);
+        
+        commentSections.forEach((section, index) => {
+          const editableFields = section.querySelectorAll('[contenteditable="true"], textarea, div[role="textbox"]');
+          console.log(`EngageIQ: Found ${editableFields.length} editable fields in comment section ${index}`);
+          
+          editableFields.forEach(field => {
+            const htmlField = field as HTMLElement;
+            if (!this.processedFields.has(htmlField)) {
+              console.log('EngageIQ: Processing comment field from page-wide search:', htmlField);
+              this.setupCommentField(htmlField);
+              this.processedFields.add(htmlField);
+              newFieldsFound++;
+            }
+          });
+        });
+      }
     }
     
-    console.log(`EngageIQ: Total comment fields processed: ${this.processedFields.size}`);
+    console.log(`EngageIQ: Found ${newFieldsFound} new comment fields, total processed: ${this.processedFields.size}`);
+    return newFieldsFound;
+  }
+  
+  /**
+   * Check if a field is within a comment section
+   */
+  isFieldInCommentSection(field: HTMLElement): boolean {
+    // Check if field is within a comment section by looking at ancestors
+    const isInCommentSection = !!field.closest('.comments-comment-box, .comments-container, .comments-comments-list');
+    
+    // Check if field is part of a comment form
+    const isInCommentForm = !!field.closest('form[data-control-name*="comment"]');
+    
+    // Check if field has a comment-related class in its hierarchy
+    let currentEl: HTMLElement | null = field;
+    let maxDepth = 5;
+    let hasCommentClass = false;
+    
+    while (currentEl && maxDepth > 0) {
+      if (currentEl.className.toLowerCase().includes('comment')) {
+        hasCommentClass = true;
+        break;
+      }
+      currentEl = currentEl.parentElement;
+      maxDepth--;
+    }
+    
+    return isInCommentSection || isInCommentForm || hasCommentClass;
   }
   
   /**
@@ -253,6 +380,9 @@ class LinkedInIntegration {
         
         // Show the generate button if we have post content
         if (this.currentPostContent) {
+          // First remove any existing buttons for this field to prevent duplicates
+          this.removeExistingButtons(field);
+          // Then show the button
           this.showGenerateButton(field, container);
         } else {
           console.warn('EngageIQ: No post content extracted, not showing button');
@@ -267,6 +397,18 @@ class LinkedInIntegration {
     field.addEventListener('focus', onFieldActivation);
     field.addEventListener('click', onFieldActivation);
     
+    // Track blur (unfocus) events to hide button when field is not active
+    field.addEventListener('blur', () => {
+      // Small delay to allow for clicking the button
+      setTimeout(() => {
+        // Check if the focus is outside our UI
+        if (!document.activeElement || !field.contains(document.activeElement)) {
+          console.log('EngageIQ: Comment field lost focus, hiding button');
+          this.removeExistingButtons(field);
+        }
+      }, 200);
+    });
+    
     // Also listen for parents being clicked in case the actual field is complex
     if (container !== field) {
       container.addEventListener('click', (e) => {
@@ -278,13 +420,39 @@ class LinkedInIntegration {
       });
     }
     
-    // Check if field is already focused/active
-    if (document.activeElement === field) {
-      console.log('EngageIQ: Field is already active, extracting content immediately');
-      onFieldActivation();
-    }
+    // We don't want to show the button immediately - only when focused
+    // Do NOT include this logic that was showing buttons prematurely:
+    // if (document.activeElement === field) {
+    //   onFieldActivation();
+    // }
     
     console.log('EngageIQ: Comment field setup complete');
+  }
+  
+  /**
+   * Remove any existing buttons for a field to prevent duplicates
+   */
+  private removeExistingButtons(field: HTMLElement) {
+    // Remove from our tracking if it exists
+    if (this.commentUIElements.has(field)) {
+      const existingUI = this.commentUIElements.get(field);
+      if (existingUI && document.contains(existingUI)) {
+        existingUI.remove();
+      }
+      this.commentUIElements.delete(field);
+    }
+    
+    // Also look for any buttons with the same field ID (in case tracking is out of sync)
+    const fieldId = field.id;
+    if (fieldId) {
+      const buttonsWithFieldId = document.querySelectorAll(`[data-field-id="${fieldId}"]`);
+      buttonsWithFieldId.forEach(button => {
+        const container = button.closest('.engageiq-button-container');
+        if (container) {
+          container.remove();
+        }
+      });
+    }
   }
   
   /**
@@ -332,8 +500,20 @@ class LinkedInIntegration {
   showGenerateButton(field: HTMLElement, container: HTMLElement) {
     // Check if button already exists for this field
     if (this.commentUIElements.has(field)) {
-      return;
+      const existingUI = this.commentUIElements.get(field);
+      if (existingUI && document.contains(existingUI)) {
+        // Button already exists and is still in the DOM
+        console.log('EngageIQ: Generate button already exists for this field');
+        return;
+      } else {
+        // Button exists in our tracking but is not in DOM
+        console.log('EngageIQ: Recreating generate button as previous one was removed');
+        this.commentUIElements.delete(field);
+      }
     }
+    
+    // Find the optimal position for the button based on container layout
+    const buttonPosition = this.calculateButtonPosition(container, field);
     
     // Create button container
     const buttonContainer = document.createElement('div');
@@ -341,71 +521,121 @@ class LinkedInIntegration {
     buttonContainer.setAttribute('data-engageiq-ui', 'true');
     buttonContainer.style.cssText = `
       position: absolute;
-      bottom: 10px;
-      right: 60px;
+      ${buttonPosition.position};
       z-index: 1000;
       display: flex;
       align-items: center;
     `;
     
-    // Create round generate button
+    // Create button with more refined styling to match LinkedIn's UI
     const generateButton = document.createElement('button');
     generateButton.className = 'engageiq-generate-button';
     generateButton.setAttribute('data-field-id', this.generateFieldId(field));
-    generateButton.style.cssText = `
-      background-color: #0a66c2;
-      color: white;
-      border: none;
-      border-radius: 50%;
-      width: 32px;
-      height: 32px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      transition: all 0.2s ease;
-    `;
     
-    // Use the extension's icon
-    const iconUrl = chrome.runtime.getURL('icons/icon16.png');
-    generateButton.innerHTML = `
-      <img src="${iconUrl}" width="16" height="16" alt="EngageIQ" style="object-fit: contain;" />
-    `;
+    // The button style changes based on the position
+    const isAboveField = buttonPosition.position.includes('top: -36px');
     
-    // Add tooltip
-    const tooltip = document.createElement('div');
-    tooltip.className = 'engageiq-tooltip';
-    tooltip.style.cssText = `
-      position: absolute;
-      top: -30px;
-      left: 50%;
-      transform: translateX(-50%);
-      background-color: rgba(0, 0, 0, 0.8);
-      color: white;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      white-space: nowrap;
-      opacity: 0;
-      transition: opacity 0.2s;
-      pointer-events: none;
-    `;
-    tooltip.textContent = 'Generate AI Comment';
-    generateButton.appendChild(tooltip);
+    // Apply different styling based on position
+    if (isAboveField) {
+      // Pill-shaped button when positioned above the field
+      generateButton.style.cssText = `
+        background-color: #0a66c2;
+        color: white;
+        border: none;
+        border-radius: 16px;
+        height: 28px;
+        padding: 0 12px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        transition: all 0.2s ease;
+        margin: 0;
+        font-size: 12px;
+        font-weight: 600;
+        opacity: 0.9;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      `;
+      
+      // Use text + icon for better clarity
+      const iconUrl = chrome.runtime.getURL('icons/icon16.png');
+      generateButton.innerHTML = `
+        <img src="${iconUrl}" width="14" height="14" alt="" style="margin-right: 6px; object-fit: contain;" />
+        <span>Generate Comment</span>
+      `;
+    } else {
+      // Round button when positioned inline with field
+      generateButton.style.cssText = `
+        background-color: #0a66c2;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+        transition: all 0.2s ease;
+        margin: 0 4px;
+        font-size: 12px;
+        opacity: 0.9;
+      `;
+      
+      // Just icon for circular button
+      const iconUrl = chrome.runtime.getURL('icons/icon16.png');
+      generateButton.innerHTML = `
+        <img src="${iconUrl}" width="16" height="16" alt="EngageIQ" style="object-fit: contain;" />
+      `;
+    }
     
-    // Show/hide tooltip on hover
-    generateButton.addEventListener('mouseover', () => {
-      generateButton.style.transform = 'scale(1.1)';
-      generateButton.style.backgroundColor = '#004182';
-      tooltip.style.opacity = '1';
-    });
-    
-    generateButton.addEventListener('mouseout', () => {
-      generateButton.style.transform = 'scale(1)';
-      generateButton.style.backgroundColor = '#0a66c2';
-      tooltip.style.opacity = '0';
-    });
+    // Only add tooltip for the circular button style (not needed for labeled button)
+    if (!isAboveField) {
+      const tooltip = document.createElement('div');
+      tooltip.className = 'engageiq-tooltip';
+      tooltip.style.cssText = `
+        position: absolute;
+        top: -30px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: rgba(0, 0, 0, 0.75);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        white-space: nowrap;
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      `;
+      tooltip.textContent = 'Generate AI Comment';
+      generateButton.appendChild(tooltip);
+      
+      // Show/hide tooltip on hover with improved animation
+      generateButton.addEventListener('mouseover', () => {
+        generateButton.style.transform = 'scale(1.1)';
+        generateButton.style.backgroundColor = '#004182';
+        tooltip.style.opacity = '1';
+      });
+      
+      generateButton.addEventListener('mouseout', () => {
+        generateButton.style.transform = 'scale(1)';
+        generateButton.style.backgroundColor = '#0a66c2';
+        tooltip.style.opacity = '0';
+      });
+    } else {
+      // For labeled button, just change color on hover (no tooltip needed)
+      generateButton.addEventListener('mouseover', () => {
+        generateButton.style.backgroundColor = '#004182';
+      });
+      
+      generateButton.addEventListener('mouseout', () => {
+        generateButton.style.backgroundColor = '#0a66c2';
+      });
+    }
     
     generateButton.addEventListener('click', (e) => {
       e.preventDefault();
@@ -416,12 +646,101 @@ class LinkedInIntegration {
     // Add button to container
     buttonContainer.appendChild(generateButton);
     
+    // Check if the container position is set to static
+    const containerPosition = window.getComputedStyle(container).position;
+    if (containerPosition === 'static') {
+      container.style.position = 'relative';
+    }
+    
     // Add container to the comment field container
-    container.style.position = 'relative';
     container.appendChild(buttonContainer);
+    
+    // Add entrance animation 
+    buttonContainer.animate(
+      [
+        { opacity: 0, transform: 'translateY(5px)' },
+        { opacity: 1, transform: 'translateY(0)' }
+      ],
+      { 
+        duration: 200,
+        easing: 'ease-out'
+      }
+    );
     
     // Store reference to the button container
     this.commentUIElements.set(field, buttonContainer);
+    
+    console.log('EngageIQ: Added generate button to comment field:', field);
+  }
+  
+  /**
+   * Calculate the best position for the button based on container layout
+   */
+  calculateButtonPosition(container: HTMLElement, _field: HTMLElement): { position: string } {
+    // Get container dimensions
+    const containerRect = container.getBoundingClientRect();
+    
+    // Start with a safer default position: above the comment field
+    let position = 'top: -36px; right: 0;';
+    
+    console.log(`EngageIQ: Comment container dimensions: ${Math.round(containerRect.width)}x${Math.round(containerRect.height)}`);
+    
+    // Check for LinkedIn's emoji button which is usually in the comment form footer
+    const emojiButtonSelectors = [
+      'button.comments-comment-box__form-emoji-button', 
+      'button.comments-comment-texteditor__emoji-button', 
+      'button[aria-label*="emoji"]',
+      '.ql-emoji'
+    ];
+    
+    // Find all emoji button candidates
+    const emojiButtons: HTMLElement[] = [];
+    emojiButtonSelectors.forEach(selector => {
+      const buttons = container.querySelectorAll(selector);
+      buttons.forEach(btn => emojiButtons.push(btn as HTMLElement));
+    });
+    
+    if (emojiButtons.length > 0) {
+      console.log(`EngageIQ: Found ${emojiButtons.length} emoji button candidates`);
+      
+      // Get the leftmost emoji button (most likely to be in our way)
+      const leftmostButton = emojiButtons.reduce((leftmost, current) => {
+        const rect = current.getBoundingClientRect();
+        const leftmostRect = leftmost ? leftmost.getBoundingClientRect() : { left: Infinity };
+        return rect.left < leftmostRect.left ? current : leftmost;
+      }, null as HTMLElement | null);
+      
+      if (leftmostButton) {
+        const buttonRect = leftmostButton.getBoundingClientRect();
+        console.log(`EngageIQ: Emoji button found at position: left=${Math.round(buttonRect.left)}, right=${Math.round(buttonRect.right)}`);
+        
+        // Calculate a position that avoids the emoji button
+        // If there's enough space, position to the left of the emoji button
+        if (buttonRect.left - containerRect.left > 40) {
+          const rightOffset = containerRect.right - buttonRect.left + 8;
+          position = `top: 50%; right: ${rightOffset}px; transform: translateY(-50%);`;
+          console.log(`EngageIQ: Positioning to the left of emoji button: right=${rightOffset}px`);
+        } else {
+          // Not enough space to the left, position above the field
+          position = 'top: -36px; right: 0;';
+          console.log('EngageIQ: Not enough space left of emoji button, positioning above field');
+        }
+      }
+    } else {
+      console.log('EngageIQ: No emoji button found, using safer positioning');
+    }
+    
+    // For narrow containers, always position above
+    if (containerRect.width < 250) {
+      position = 'top: -36px; right: 0;';
+      console.log('EngageIQ: Narrow container, positioning above field');
+    }
+    
+    // Always use above positioning as it's the most reliable
+    console.log('EngageIQ: Using above-field positioning for maximum reliability');
+    position = 'top: -36px; right: 0;';
+    
+    return { position };
   }
   
   /**
