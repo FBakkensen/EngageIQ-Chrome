@@ -91,6 +91,17 @@ chrome.runtime.onMessage.addListener((
             break;
           }
           
+          case 'GET_LINKEDIN_STATUS': {
+            // Check for LinkedIn tabs
+            chrome.tabs.query({ url: "*://*.linkedin.com/*" }, (tabs) => {
+              sendResponse({ 
+                linkedinTabExists: tabs.length > 0,
+                activeTab: tabs.length > 0 ? tabs[0] : null
+              });
+            });
+            break;
+          }
+          
           default:
             sendResponse({ error: 'Unknown message type' });
         }

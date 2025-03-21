@@ -53,6 +53,7 @@ declare namespace EngageIQ {
     | { type: 'COMMENT_GENERATED', payload: CommentResponse }
     | { type: 'INSERT_COMMENT', payload: { comment: string, elementId?: string } }
     | { type: 'BUTTON_CLICKED', payload: { postId: string } }
+    | { type: 'GET_LINKEDIN_STATUS' }
     | { type: 'ERROR', payload: { message: string, context: string } };
     
   /**
@@ -82,5 +83,10 @@ declare namespace EngageIQ {
   interface ErrorResponse {
     error: string;
     errorDetails?: string;
+  }
+  
+  interface LinkedInStatusResponse {
+    linkedinTabExists: boolean;
+    activeTab: chrome.tabs.Tab | null;
   }
 }
