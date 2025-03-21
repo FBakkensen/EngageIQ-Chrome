@@ -39,7 +39,7 @@ initializeExtension().catch(error => {
  */
 chrome.runtime.onMessage.addListener((
   message: EngageIQ.MessageType, 
-  _sender, 
+  sender, 
   sendResponse
 ) => {
   console.log('Received message:', message);
@@ -78,13 +78,14 @@ chrome.runtime.onMessage.addListener((
           
           case 'GENERATE_COMMENT': {
             try {
-              const { postContent, options } = message.payload;
+              const { postContent, options, fieldId } = message.payload;
               
               // Log some details about the request
               console.log('Generating comment with the following data:');
               console.log('Post text:', postContent.text?.substring(0, 100) + (postContent.text?.length > 100 ? '...' : ''));
               console.log('Post type:', postContent.postType);
               console.log('Options:', JSON.stringify(options));
+              console.log('Field ID:', fieldId);
               
               // Generate comments
               const comments = await CommentGenerationService.generateComments(postContent, options);
@@ -92,7 +93,21 @@ chrome.runtime.onMessage.addListener((
               // Log success (but not the actual comments to avoid cluttering logs)
               console.log('Comment generation successful with Gemini API');
               
-              // Send back the generated comments
+              // Send the COMMENT_GENERATED message back to the content script
+              if (sender && sender.tab && sender.tab.id) {
+                chrome.tabs.sendMessage(sender.tab.id, {
+                  type: 'COMMENT_GENERATED',
+                  payload: {
+                    comments,
+                    fieldId
+                  }
+                });
+                console.log('Sent COMMENT_GENERATED message to content script');
+              } else {
+                console.error('Cannot send COMMENT_GENERATED message: sender tab information missing');
+              }
+              
+              // Also send back the direct response
               sendResponse({ success: true, comments });
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : String(error);

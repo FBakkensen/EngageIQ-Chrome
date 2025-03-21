@@ -18,7 +18,7 @@ declare namespace EngageIQ {
    * Comment generation options
    */
   interface CommentOptions {
-    tone: 'supportive' | 'insightful' | 'curious' | 'professional';
+    tone: 'supportive' | 'insightful' | 'curious' | 'professional' | 'all';
     length: 'very_short' | 'short' | 'medium' | 'long' | 'very_long';
   }
 
@@ -65,8 +65,8 @@ declare namespace EngageIQ {
     | { type: 'GET_API_KEY' }
     | { type: 'SET_API_KEY', payload: string }
     | { type: 'VALIDATE_API_KEY', payload: string }
-    | { type: 'GENERATE_COMMENT', payload: { postContent: PostContent, options: CommentOptions } }
-    | { type: 'COMMENT_GENERATED', payload: CommentResponse }
+    | { type: 'GENERATE_COMMENT', payload: { postContent: PostContent, options: CommentOptions, fieldId: string } }
+    | { type: 'COMMENT_GENERATED', payload: { comments: CommentResponse, fieldId: string } }
     | { type: 'INSERT_COMMENT', payload: { comment: string, elementId?: string } }
     | { type: 'BUTTON_CLICKED', payload: { postId: string } }
     | { type: 'GET_LINKEDIN_STATUS' }

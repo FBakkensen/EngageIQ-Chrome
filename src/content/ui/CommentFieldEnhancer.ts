@@ -146,10 +146,17 @@ export class CommentFieldEnhancer {
         type: 'GENERATE_COMMENT',
         payload: {
           fieldId: field.id,
-          postContent
+          postContent,
+          options: {
+            tone: 'all',
+            length: 'medium'
+          }
         }
       }, (response) => {
         this.logger.info('Generate comment response:', response);
+        
+        // For debugging - we should now receive a COMMENT_GENERATED message from background script
+        this.logger.info('Waiting for COMMENT_GENERATED message...');
       });
     });
   }

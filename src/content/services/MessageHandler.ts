@@ -25,6 +25,7 @@ export class MessageHandler {
       if ('type' in message) {
         switch (message.type) {
           case 'COMMENT_GENERATED':
+            console.log('⭐ MessageHandler: Received COMMENT_GENERATED message', message.payload);
             this.handleCommentGenerated(message.payload);
             sendResponse({ success: true });
             break;
@@ -74,7 +75,7 @@ export class MessageHandler {
   /**
    * Handle generated comments
    */
-  private handleCommentGenerated(payload: any): void {
+  private handleCommentGenerated(payload: { comments: EngageIQ.CommentResponse, fieldId: string }): void {
     console.log('⭐ MessageHandler: Comment generated:', payload);
     
     // Check if we have comments and a field ID
