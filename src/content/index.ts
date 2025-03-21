@@ -27,6 +27,10 @@ class LinkedInIntegration {
     // Set up observer to detect dynamically loaded content
     this.setupMutationObserver();
     
+    // Initial scan for LinkedIn posts
+    const postsDetected = this.scanForLinkedInPosts();
+    console.log(`EngageIQ: Initial scan detected ${postsDetected} LinkedIn posts`);
+    
     // Initial scan for existing comment fields
     this.scanForCommentFields();
   }
@@ -50,6 +54,21 @@ class LinkedInIntegration {
             sendResponse({ success: true });
             break;
             
+          case 'GET_LINKEDIN_POST_STATUS':
+            // Trigger a fresh scan
+            const postsCount = this.scanForLinkedInPosts();
+            // Get number of processed comment fields
+            const commentFieldsCount = this.processedFields.size;
+            
+            sendResponse({ 
+              success: true,
+              postsDetected: postsCount,
+              commentFieldsDetected: commentFieldsCount,
+              url: window.location.href,
+              isLinkedInPage: this.isLinkedInPage()
+            });
+            break;
+          
           default:
             sendResponse({ error: 'Unknown message type' });
         }
@@ -60,11 +79,23 @@ class LinkedInIntegration {
   }
   
   /**
+   * Check if the current page is a LinkedIn page
+   */
+  isLinkedInPage(): boolean {
+    const hostname = window.location.hostname;
+    return hostname.includes('linkedin.com');
+  }
+  
+  /**
    * Set up mutation observer to detect new elements
    */
   setupMutationObserver() {
     const observer = new MutationObserver(
       this.debounce((_mutations) => {
+        // Scan for new posts
+        this.scanForLinkedInPosts();
+        
+        // Scan for comment fields that might not be in detected posts
         this.scanForCommentFields();
       }, 500)
     );
@@ -74,7 +105,13 @@ class LinkedInIntegration {
       subtree: true
     });
     
-    console.log('Mutation observer set up');
+    // Also observe scroll events as LinkedIn loads content dynamically when scrolling
+    window.addEventListener('scroll', this.debounce(() => {
+      console.log('EngageIQ: Scroll event detected, scanning for new content');
+      this.scanForLinkedInPosts();
+    }, 1000));
+    
+    console.log('Mutation observer and scroll listener set up');
   }
   
   /**
@@ -837,25 +874,240 @@ class LinkedInIntegration {
   }
   
   /**
+   * Scan for LinkedIn posts 
+   * This is separate from comment field detection to allow for highlighting posts
+   */
+  scanForLinkedInPosts() {
+    console.log('EngageIQ: Scanning for LinkedIn posts');
+    
+    // Track detected posts
+    const detectedPosts = new Set<HTMLElement>();
+    
+    // Different selectors for LinkedIn posts based on various feed layouts
+    const postSelectors = [
+      // Feed posts
+      '.feed-shared-update-v2',
+      '.update-components-update',
+      'article.feed-shared-update',
+      '.occludable-update', 
+      // LinkedIn articles 
+      '.scaffold-finite-scroll__content article',
+      // Job posts
+      '.job-view-layout',
+      // Company pages posts
+      '.org-updates__content article',
+      // Profile activity posts
+      '.profile-creator-shared-feed-update',
+      // Newer post formats
+      '[data-urn]',
+      'div[data-id]',
+      // Generic article elements (fallback)
+      'article.ember-view'
+    ];
+    
+    // Try each selector
+    postSelectors.forEach(selector => {
+      const posts = document.querySelectorAll(selector);
+      console.log(`EngageIQ: Found ${posts.length} posts with selector "${selector}"`);
+      
+      posts.forEach(post => {
+        const htmlPost = post as HTMLElement;
+        
+        // Skip already processed posts
+        if (detectedPosts.has(htmlPost)) {
+          return;
+        }
+        
+        // Verify this is actually a post (not a header or sidebar element)
+        if (this.isLikelyPost(htmlPost)) {
+          console.log('EngageIQ: Detected LinkedIn post:', htmlPost);
+          
+          // Process the post
+          this.processLinkedInPost(htmlPost);
+          
+          // Mark as processed
+          detectedPosts.add(htmlPost);
+        }
+      });
+    });
+    
+    console.log(`EngageIQ: Total posts detected: ${detectedPosts.size}`);
+    return detectedPosts.size;
+  }
+  
+  /**
+   * Determine if an element is likely a LinkedIn post
+   */
+  isLikelyPost(element: HTMLElement): boolean {
+    // Check element size (posts are usually substantial elements)
+    const rect = element.getBoundingClientRect();
+    if (rect.width < 300 || rect.height < 100) {
+      return false;
+    }
+    
+    // Check for common post components
+    const hasAuthor = !!element.querySelector('.feed-shared-actor__name, .update-components-actor__name, a[href*="/in/"]');
+    
+    const hasContent = !!element.querySelector('.feed-shared-update-v2__description-wrapper, .feed-shared-text, p, .update-components-text');
+    
+    const hasEngagement = !!element.querySelector('.social-details-social-counts, .social-action-buttons, .comments-comment-box');
+    
+    // Check for "promoted" or "ad" content
+    const isPromoted = !!element.querySelector('.feed-shared-actor__sub-description');
+    const promotedText = isPromoted ? element.querySelector('.feed-shared-actor__sub-description')?.textContent?.toLowerCase() : '';
+    const isAd = promotedText?.includes('promoted') || promotedText?.includes('ad') || false;
+    
+    // A post likely has author, content, and engagement elements
+    const isLikelyPost = (hasAuthor && hasContent) || hasEngagement;
+    
+    console.log('EngageIQ: Post validation:', {
+      size: `${Math.round(rect.width)}x${Math.round(rect.height)}`,
+      hasAuthor,
+      hasContent,
+      hasEngagement,
+      isAd,
+      isLikelyPost
+    });
+    
+    return isLikelyPost && !isAd; // Exclude ads
+  }
+  
+  /**
+   * Process a detected LinkedIn post
+   */
+  processLinkedInPost(post: HTMLElement) {
+    console.log('EngageIQ: Processing LinkedIn post:', post);
+    
+    // Extract post data
+    const postContent = this.extractPostContent(post);
+    
+    // Store post data for later use
+    if (postContent) {
+      console.log('EngageIQ: Extracted post content:', postContent);
+      // Store post data with unique ID
+      const postId = this.generatePostId(post);
+      post.setAttribute('data-engageiq-post-id', postId);
+      
+      // Add a subtle visual indicator for detected posts (only in development mode)
+      if (location.hostname === 'localhost' || location.search.includes('engageiq-debug')) {
+        this.addPostIndicator(post, postId);
+      }
+    }
+    
+    // Check for comment fields within this post
+    const commentFields = post.querySelectorAll('.comments-comment-box__form [contenteditable="true"], [aria-label*="comment"]');
+    console.log(`EngageIQ: Found ${commentFields.length} comment fields in this post`);
+    
+    commentFields.forEach(field => {
+      if (!this.processedFields.has(field as HTMLElement)) {
+        this.setupCommentField(field as HTMLElement);
+        this.processedFields.add(field as HTMLElement);
+      }
+    });
+  }
+  
+  /**
+   * Add a visual indicator to show a post has been detected (for development/debugging)
+   */
+  addPostIndicator(post: HTMLElement, postId: string) {
+    // Skip if already has indicator
+    if (post.querySelector('.engageiq-post-indicator')) {
+      return;
+    }
+    
+    // Create indicator element
+    const indicator = document.createElement('div');
+    indicator.className = 'engageiq-post-indicator';
+    indicator.setAttribute('data-engageiq-ui', 'true');
+    indicator.style.cssText = `
+      position: absolute;
+      top: 0;
+      right: 0;
+      background-color: rgba(10, 102, 194, 0.1);
+      border-left: 3px solid #0a66c2;
+      padding: 4px 8px;
+      font-size: 10px;
+      color: #0a66c2;
+      font-family: monospace;
+      z-index: 1000;
+      border-bottom-left-radius: 4px;
+      opacity: 0.7;
+      transition: opacity 0.2s, background-color 0.2s;
+      pointer-events: none;
+    `;
+    indicator.textContent = `Post ID: ${postId.substring(0, 10)}...`;
+    
+    // Make sure post has relative positioning for absolute placement
+    if (getComputedStyle(post).position === 'static') {
+      post.style.position = 'relative';
+    }
+    
+    // Add to post
+    post.appendChild(indicator);
+    
+    // Fade out after 3 seconds
+    setTimeout(() => {
+      indicator.style.opacity = '0.3';
+    }, 3000);
+    
+    // Add hover effect to parent
+    post.addEventListener('mouseenter', () => {
+      indicator.style.opacity = '0.9';
+      indicator.style.backgroundColor = 'rgba(10, 102, 194, 0.2)';
+    });
+    
+    post.addEventListener('mouseleave', () => {
+      indicator.style.opacity = '0.3';
+      indicator.style.backgroundColor = 'rgba(10, 102, 194, 0.1)';
+    });
+  }
+  
+  /**
+   * Generate a unique ID for a post
+   */
+  generatePostId(post: HTMLElement): string {
+    // Try to get LinkedIn's own post ID if available
+    const urn = post.getAttribute('data-urn');
+    if (urn) {
+      return `urn-${urn}`;
+    }
+    
+    const dataId = post.getAttribute('data-id');
+    if (dataId) {
+      return `id-${dataId}`;
+    }
+    
+    // Fallback to generating our own ID
+    return `post-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+  }
+  
+  /**
    * Extract post content for context
    */
-  extractPostContent(commentField: HTMLElement): EngageIQ.PostContent | null {
+  extractPostContent(element: HTMLElement): EngageIQ.PostContent | null {
+    // Determine if we're using a post element or a comment field
+    const isCommentField = element.getAttribute('contenteditable') === 'true' || 
+                         element.tagName === 'TEXTAREA' ||
+                         element.getAttribute('aria-label')?.includes('comment');
+    
     // Find the post container
-    console.log('EngageIQ: Extracting post content for comment field', commentField);
-    let postContainer = this.findPostContainer(commentField);
+    console.log('EngageIQ: Extracting post content from', isCommentField ? 'comment field' : 'post element');
+    let postContainer = isCommentField ? this.findPostContainer(element) : element;
     
     if (!postContainer) {
-      console.warn('EngageIQ: Could not find post container for comment field');
+      console.warn('EngageIQ: Could not find post container');
       
       // Log all parent elements to help debug
-      console.log('EngageIQ: Parent elements:');
-      let parent = commentField.parentElement;
-      let depth = 0;
-      while (parent && depth < 5) {
-        console.log(`EngageIQ: Parent level ${depth}:`, parent);
-        console.log(`EngageIQ: Classes: "${parent.className}"`);
-        parent = parent.parentElement;
-        depth++;
+      if (isCommentField) {
+        console.log('EngageIQ: Parent elements:');
+        let parent = element.parentElement;
+        let depth = 0;
+        while (parent && depth < 5) {
+          console.log(`EngageIQ: Parent level ${depth}:`, parent);
+          console.log(`EngageIQ: Classes: "${parent.className}"`);
+          parent = parent.parentElement;
+          depth++;
+        }
       }
       
       return {
