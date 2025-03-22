@@ -219,17 +219,61 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 ---
 
 ### Step 14: Implement Length Customization
+
+**Sub-Step 14.1: Add Length Preference Options to UI**
 **Tasks:**
-- Add length preference options to UI
-- Update prompt engineering to handle length preferences
-- Save user preferences
+- Design and implement slider in the comment display UI for selecting comment length (e.g., Short, Medium, Long).
+- Ensure the UI integrates seamlessly with the existing design.
 
 **Verification:**
-1. Test different length settings and verify comments match selected length
-2. Check that preferences persist between sessions
-3. Verify UI for length selection works correctly
+1. Verify the length selection UI appears correctly in the comment display modal.
+2. Test responsiveness and compatibility with light/dark modes.
+3. Check that the selected length is visually highlighted.
 
-**Next Step:** Add multilingual support
+**Next Sub-Step:** Update prompt engineering to handle length preferences.
+
+---
+
+**Sub-Step 14.2: Update Prompt Engineering for Length Preferences**
+**Tasks:**
+- Modify the prompt generation logic to include the selected length preference.
+- Ensure the prompt dynamically adjusts based on the user's selection.
+
+**Verification:**
+1. Test prompt generation with each length option and verify the API request includes the correct length parameter.
+2. Check that the generated comments match the selected length.
+3. Verify error handling for invalid or missing length preferences.
+
+**Next Sub-Step:** Save user preferences for length selection.
+
+---
+
+**Sub-Step 14.3: Save User Preferences for Length Selection**
+**Tasks:**
+- Implement logic to persist the user's length preference using secure storage.
+- Ensure preferences are loaded and applied when the extension is reopened.
+
+**Verification:**
+1. Select a length preference and verify it persists after refreshing the extension.
+2. Test with multiple users or profiles to ensure preferences are stored independently.
+3. Verify secure storage implementation to prevent unauthorized access.
+
+**Next Sub-Step:** Final testing and integration of length customization.
+
+---
+
+**Sub-Step 14.4: Final Testing and Integration**
+**Tasks:**
+- Test the entire length customization workflow end-to-end.
+- Ensure seamless integration with other features, such as tone selection and comment insertion.
+- Fix any bugs or inconsistencies identified during testing.
+
+**Verification:**
+1. Test the complete user flow, from selecting a length to generating and inserting a comment.
+2. Verify compatibility with different LinkedIn post types and content.
+3. Check for any performance issues or UI glitches.
+
+**Next Step:** Add multilingual support.
 
 ---
 
