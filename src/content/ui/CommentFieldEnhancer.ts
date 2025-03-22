@@ -74,6 +74,12 @@ export class CommentFieldEnhancer {
     // Attach event listeners
     this.attachEventListeners(button, field);
     
+    // Make button visible by default
+    button.style.display = 'block';
+    
+    // Add focus and blur event listeners to manage button
+    this.attachFieldFocusEvents(button, field);
+    
     this.logger.info('ENHANCEMENT: Field enhanced with ID:', field.id);
     return field.id;
   }
@@ -83,11 +89,12 @@ export class CommentFieldEnhancer {
    */
   private createGenerateButton(field: HTMLElement): HTMLElement {
     const button = document.createElement('button');
+    button.id = `engageiq-button-${field.id}`;
     button.className = 'engageiq-generate-button';
     button.textContent = 'Generate Comment';
     button.setAttribute('data-field-id', field.id);
     
-    // Style the button to match LinkedIn's design
+    // Style the button to match LinkedIn's design with improved visibility
     button.style.cssText = `
       background-color: #0a66c2;
       color: white;
@@ -99,7 +106,8 @@ export class CommentFieldEnhancer {
       cursor: pointer;
       transition: background-color 0.2s;
       position: absolute;
-      z-index: 1000;
+      z-index: 9999;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     `;
     
     // Hover effects
@@ -111,6 +119,7 @@ export class CommentFieldEnhancer {
       button.style.backgroundColor = '#0a66c2';
     });
     
+    this.logger.info('ENHANCEMENT: Created button with ID:', button.id);
     return button;
   }
   
@@ -118,14 +127,37 @@ export class CommentFieldEnhancer {
    * Position the button relative to the comment field
    */
   private positionButton(button: HTMLElement, field: HTMLElement): void {
+    // Get the field's dimensions and position
     const fieldRect = field.getBoundingClientRect();
+    this.logger.info('ENHANCEMENT: Field dimensions', {
+      top: fieldRect.top,
+      right: fieldRect.right,
+      bottom: fieldRect.bottom,
+      left: fieldRect.left,
+      width: fieldRect.width,
+      height: fieldRect.height
+    });
     
-    // Position at top-right of the field
-    button.style.top = `${window.scrollY + fieldRect.top - 40}px`;
-    button.style.left = `${window.scrollX + fieldRect.right - 150}px`;
+    // Position at top-right of the field with adjusted positioning
+    const topPosition = window.scrollY + fieldRect.top;
+    const leftPosition = window.scrollX + fieldRect.left + fieldRect.width - 150;
+    
+    button.style.top = `${topPosition}px`;
+    button.style.left = `${leftPosition}px`;
+    
+    this.logger.info('ENHANCEMENT: Button positioned at', {
+      top: button.style.top,
+      left: button.style.left
+    });
     
     // Append to document body for absolute positioning
     document.body.appendChild(button);
+    
+    // Verify button is in DOM
+    setTimeout(() => {
+      const buttonInDOM = document.getElementById(button.id);
+      this.logger.info('ENHANCEMENT: Button in DOM check:', !!buttonInDOM);
+    }, 100);
   }
   
   /**
@@ -159,6 +191,92 @@ export class CommentFieldEnhancer {
         this.logger.info('Waiting for COMMENT_GENERATED message...');
       });
     });
+  }
+  
+  /**
+   * Attach focus and blur event listeners to manage button visibility
+   */
+  private attachFieldFocusEvents(button: HTMLElement, field: HTMLElement): void {
+    // Track which element was last focused to correctly manage button visibility
+    let isFieldOrButtonFocused = false;
+    
+    // Show button when field is focused or clicked
+    field.addEventListener('focus', () => {
+      this.logger.info('Field focused:', field.id);
+      isFieldOrButtonFocused = true;
+      this.updateButtonPosition(button, field);
+      button.style.display = 'block';
+    });
+    
+    field.addEventListener('click', () => {
+      this.logger.info('Field clicked:', field.id);
+      isFieldOrButtonFocused = true;
+      this.updateButtonPosition(button, field);
+      button.style.display = 'block';
+    });
+    
+    // Hide button when field loses focus
+    field.addEventListener('blur', () => {
+      this.logger.info('Field lost focus:', field.id);
+      isFieldOrButtonFocused = false;
+      
+      // Small delay to check if focus moved to the button
+      setTimeout(() => {
+        // Only hide if neither the field nor button have focus
+        if (!isFieldOrButtonFocused) {
+          this.logger.info('Hiding button after field blur');
+          button.style.display = 'none';
+        }
+      }, 200);
+    });
+    
+    // Keep button visible when it's focused
+    button.addEventListener('focus', () => {
+      this.logger.info('Button focused');
+      isFieldOrButtonFocused = true;
+      button.style.display = 'block';
+    });
+    
+    // Hide button when it loses focus
+    button.addEventListener('blur', () => {
+      this.logger.info('Button lost focus');
+      isFieldOrButtonFocused = false;
+      
+      // Small delay to check if focus moved to the field
+      setTimeout(() => {
+        // Only hide if neither the field nor button have focus
+        if (!isFieldOrButtonFocused) {
+          this.logger.info('Hiding button after button blur');
+          button.style.display = 'none';
+        }
+      }, 200);
+    });
+    
+    // Add click handler to the button that updates its state
+    button.addEventListener('click', () => {
+      // Button was clicked, keep track of this interaction
+      this.logger.info('Button clicked');
+      isFieldOrButtonFocused = true;
+    });
+    
+    // Add global document click handler to hide button when clicking elsewhere
+    document.addEventListener('click', (e) => {
+      // If click is outside both the field and button, hide the button
+      if (e.target !== field && e.target !== button && !field.contains(e.target as Node) && !button.contains(e.target as Node)) {
+        this.logger.info('Document clicked outside field and button');
+        isFieldOrButtonFocused = false;
+        button.style.display = 'none';
+      }
+    });
+  }
+  
+  /**
+   * Update button position in case the field has moved
+   */
+  private updateButtonPosition(button: HTMLElement, field: HTMLElement): void {
+    const fieldRect = field.getBoundingClientRect();
+    button.style.top = `${window.scrollY + fieldRect.top}px`;
+    button.style.left = `${window.scrollX + fieldRect.left + fieldRect.width - 150}px`;
   }
   
   /**
