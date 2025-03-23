@@ -132,6 +132,9 @@ export class CommentGenerationService {
           // Remove quotation marks if present
           commentText = commentText.replace(/^["']|["']$/g, '');
           
+          // Apply post-processing to improve formatting
+          commentText = this.applyCommentFormatting(commentText, tone, options.length);
+          
           // Save the processed comment
           comments[tone] = commentText;
           console.log(`Generated ${tone} comment (${commentText.length} chars)`);
@@ -323,6 +326,29 @@ export class CommentGenerationService {
       ? 'This appears to be professional or industry-related content.'
       : '';
     
+    // Tone-specific emoji guidance
+    const emojiGuidance: Record<string, string> = {
+      'supportive': 'Use 1-2 supportive or positive emojis that match the emotional tone, such as 👏, 💯, 🙌, ✨, or 👍.',
+      'insightful': 'Use 1-2 thoughtful or analytical emojis if appropriate, such as 💡, 🧠, 📊, or 🔍.',
+      'curious': 'Use 1-2 questioning or curious emojis if appropriate, such as 🤔, 🧐, or ❓.',
+      'professional': 'Use 0-1 professional and restrained emojis if appropriate for the context, such as 📈, ✅, or 👨‍💼.'
+    };
+    
+    // Get emoji guidance for the selected tone
+    const emojiGuidanceDetail = emojiGuidance[options.tone] || '';
+    
+    // Comment structure guidance based on length
+    const structureGuidance = {
+      'very_short': 'Keep the comment as a single, concise paragraph.',
+      'short': 'Structure as a single, focused paragraph with clear opening and closing.',
+      'medium': 'Consider using 1-2 paragraphs with a clear opening and closing statement.',
+      'long': 'Structure with 2-3 paragraphs for readability. Add an opening hook and conclusion.',
+      'very_long': 'Use 3-4 paragraphs with appropriate breaks. Consider using bullet points for key ideas.'
+    }[options.length];
+    
+    // Engagement-focused formatting 
+    const formattingGuidance = 'Use spacing and structure to enhance readability. For longer comments, use paragraph breaks at logical points to make the comment scannable. If listing multiple points, use a dash or bullet format.';
+    
     // Construct the enhanced prompt
     return `
       You are a professional LinkedIn user creating a thoughtful comment on the following post:
@@ -352,9 +378,101 @@ export class CommentGenerationService {
       7. Make the comment authentic and conversational, not generic or formulaic
       8. Do not explicitly mention that you're commenting on their post (e.g., avoid phrases like "Thanks for sharing this post")
       9. Your comment should provide value to the conversation
+      10. ${structureGuidance}
+      11. ${formattingGuidance}
+      12. ${emojiGuidanceDetail}
+      13. For longer comments (medium, long, very_long), include an attention-grabbing opener and a memorable closing statement
       
       Return only the comment text without any additional formatting, explanations, or quotation marks.
     `.trim();
+  }
+
+  /**
+   * Applies additional formatting to improve comment readability
+   * @param comment Original comment text
+   * @param tone Comment tone
+   * @param length Comment length preference
+   * @returns Formatted comment
+   */
+  private static applyCommentFormatting(
+    comment: string, 
+    tone: string,
+    length: string
+  ): string {
+    // Don't modify very short comments
+    if (length === 'very_short') {
+      return comment;
+    }
+    
+    // Ensure proper paragraph breaks are respected
+    // If there are double newlines, keep them; otherwise, look for single newlines too
+    let formattedComment = comment;
+    
+    // Replace traditional bullet points with LinkedIn-friendly dashes
+    formattedComment = formattedComment.replace(/^[•●■]/gm, '-');
+    
+    // Ensure proper spacing after bullet points
+    formattedComment = formattedComment.replace(/^- ([a-zA-Z0-9])/gm, '- $1');
+    
+    // For longer comments, ensure there's proper spacing between paragraphs
+    if (['medium', 'long', 'very_long'].includes(length)) {
+      // Find paragraph breaks and ensure they're properly spaced
+      formattedComment = formattedComment.replace(/([.!?])\s+([A-Z])/g, '$1\n\n$2');
+      
+      // Remove excessive blank lines (more than 2 consecutive newlines)
+      formattedComment = formattedComment.replace(/\n{3,}/g, '\n\n');
+    }
+    
+    // Add tone-appropriate emojis if they don't already exist in the text
+    if (!this.hasEmoji(formattedComment)) {
+      // Emojis by tone
+      const toneEmojis: Record<string, string[]> = {
+        'supportive': ['👏', '💯', '🙌', '✨', '👍', '❤️', '🔥'],
+        'insightful': ['💡', '🧠', '📊', '🔍', '📈', '🤓', '🎯'],
+        'curious': ['🤔', '🧐', '❓', '🌟', '🌱', '🎬', '📝'],
+        'professional': ['✅', '📊', '📈', '💼', '🔹', '⭐', '📌']
+      };
+      
+      // Select a random emoji appropriate for the tone
+      const availableEmojis = toneEmojis[tone] || toneEmojis.professional;
+      const emoji = availableEmojis[Math.floor(Math.random() * availableEmojis.length)];
+      
+      // For short, we'll just add an emoji at the beginning or end
+      if (length === 'short') {
+        // Add to the end if not already a strong ending punctuation
+        if (!formattedComment.match(/[!?]$/)) {
+          formattedComment = formattedComment.replace(/\.?$/, `. ${emoji}`);
+        } else {
+          formattedComment = `${formattedComment} ${emoji}`;
+        }
+      } 
+      // For longer comments, strategically place emoji at the beginning or end
+      else {
+        // For medium, long, and very_long: add to beginning or end paragraph
+        const rand = Math.random();
+        
+        if (rand < 0.4) {
+          // Add to the beginning
+          formattedComment = `${emoji} ${formattedComment}`;
+        } else {
+          // Add to the end if not already ending with punctuation + emoji
+          if (!formattedComment.match(/[!?][\s\S]*\p{Emoji_Presentation}$/u)) {
+            formattedComment = formattedComment.replace(/\.?$/, `. ${emoji}`);
+          }
+        }
+      }
+    }
+    
+    return formattedComment;
+  }
+  
+  /**
+   * Helper function to check if text already contains emojis
+   */
+  private static hasEmoji(text: string): boolean {
+    // Regex to detect emoji characters
+    const emojiRegex = /[\p{Emoji}]/u;
+    return emojiRegex.test(text);
   }
 
   /**
@@ -499,12 +617,20 @@ export class CommentGenerationService {
       }
     }
     
-    // Adjust comment lengths based on the selected option
-    return {
+    // Adjust length of comments based on user preference
+    const lengthAdjustedComments = {
       supportive: adjustLength(baseComments.supportive),
       insightful: adjustLength(baseComments.insightful),
       curious: adjustLength(baseComments.curious),
       professional: adjustLength(baseComments.professional)
+    };
+    
+    // Apply the same formatting enhancements as the real comments
+    return {
+      supportive: this.applyCommentFormatting(lengthAdjustedComments.supportive, 'supportive', options.length),
+      insightful: this.applyCommentFormatting(lengthAdjustedComments.insightful, 'insightful', options.length),
+      curious: this.applyCommentFormatting(lengthAdjustedComments.curious, 'curious', options.length),
+      professional: this.applyCommentFormatting(lengthAdjustedComments.professional, 'professional', options.length)
     };
   }
 

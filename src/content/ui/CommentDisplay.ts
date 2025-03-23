@@ -544,22 +544,26 @@ export class CommentDisplay implements ICommentDisplay {
       
       tabsNav.appendChild(tabButton);
       
-      // Create a tab pane for this tone
+      // Comment text area creation
       const tabPane = document.createElement('div');
+      tabPane.className = 'engageiq-tab-pane';
       tabPane.dataset.tab = index.toString();
       tabPane.style.cssText = `
         display: ${index === activeTab ? 'block' : 'none'};
-        margin-bottom: 8px;
+        padding: 10px 0;
       `;
       
-      // Create text area with the comment for this tone
-      const commentText = document.createElement('textarea');
-      commentText.value = comments[tone];
-      commentText.style.cssText = `
+      // Store the raw text (for the copy function)
+      const rawCommentText = comments[tone];
+      
+      // Create a container for the formatted comment display
+      const commentContainer = document.createElement('div');
+      commentContainer.className = 'engageiq-comment-container';
+      commentContainer.style.cssText = `
         width: 100%;
         min-height: 120px;
         max-height: 220px;
-        padding: 10px;
+        padding: 14px;
         margin-bottom: 10px;
         border-radius: 6px;
         border: 1px solid ${isDarkMode ? '#424242' : '#e0e0e0'};
@@ -567,11 +571,27 @@ export class CommentDisplay implements ICommentDisplay {
         color: ${isDarkMode ? '#f5f5f5' : '#1d2226'};
         font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
         font-size: 13px;
-        line-height: 1.5;
-        resize: vertical;
-        outline: none;
-        transition: border-color 0.2s;
+        line-height: 1.6;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        word-break: break-word;
       `;
+      
+      // Format the comment with proper paragraph breaks
+      const formattedComment = this.formatCommentForDisplay(comments[tone]);
+      commentContainer.innerHTML = formattedComment;
+      
+      // Hidden textarea for copy functionality
+      const hiddenTextArea = document.createElement('textarea');
+      hiddenTextArea.style.cssText = `
+        position: absolute;
+        left: -9999px;
+        top: -9999px;
+        opacity: 0;
+        height: 0;
+        width: 0;
+      `;
+      hiddenTextArea.value = rawCommentText;
       
       // Button container
       const buttonContainer = document.createElement('div');
@@ -607,22 +627,31 @@ export class CommentDisplay implements ICommentDisplay {
       });
       
       copyButton.addEventListener('click', () => {
-        navigator.clipboard.writeText(comments[tone]).then(() => {
-          const originalText = copyButton.textContent;
-          copyButton.textContent = 'Copied!';
-          setTimeout(() => {
-            copyButton.textContent = originalText;
-          }, 2000);
-        });
+        // Copy text to clipboard
+        hiddenTextArea.select();
+        document.execCommand('copy');
+        
+        // Visual feedback
+        const originalText = copyButton.textContent;
+        copyButton.textContent = 'Copied!';
+        copyButton.style.backgroundColor = isDarkMode ? 'rgba(0, 115, 177, 0.2)' : 'rgba(10, 102, 194, 0.2)';
+        
+        setTimeout(() => {
+          copyButton.textContent = originalText;
+          copyButton.style.backgroundColor = 'transparent';
+        }, 1500);
+        
+        // Analytics
+        this.trackCopyAction(tone);
       });
       
       // Use button
       const useButton = document.createElement('button');
-      useButton.textContent = 'Use This Comment';
+      useButton.textContent = 'Use Comment';
       useButton.style.cssText = `
         background-color: ${isDarkMode ? '#0073b1' : '#0a66c2'};
-        color: white;
         border: none;
+        color: white;
         border-radius: 16px;
         padding: 8px 16px;
         font-size: 14px;
@@ -695,7 +724,8 @@ export class CommentDisplay implements ICommentDisplay {
       buttonContainer.appendChild(copyButton);
       buttonContainer.appendChild(useButton);
       
-      tabPane.appendChild(commentText);
+      tabPane.appendChild(commentContainer);
+      tabPane.appendChild(hiddenTextArea);
       tabPane.appendChild(buttonContainer);
       tabPane.appendChild(keyboardHint);
       
@@ -1634,5 +1664,59 @@ export class CommentDisplay implements ICommentDisplay {
     // Clear content and show error
     commentsUI.innerHTML = '';
     commentsUI.appendChild(errorContainer);
+  }
+
+  /**
+   * Format comment text for display with proper paragraph breaks and formatting
+   */
+  private formatCommentForDisplay(comment: string): string {
+    if (!comment) return '';
+    
+    let formattedText = this.escapeHtml(comment);
+    
+    // Convert newlines to HTML breaks
+    formattedText = formattedText.replace(/\n\n/g, '</p><p>');
+    formattedText = formattedText.replace(/\n/g, '<br>');
+    
+    // Style bullet points (dashes)
+    formattedText = formattedText.replace(/- (.+?)(?:<br>|<\/p>|$)/g, '<span class="bullet-point">• $1</span>$2');
+
+    // Wrap in paragraphs if not already
+    if (!formattedText.startsWith('<p>')) {
+      formattedText = `<p>${formattedText}</p>`;
+    }
+    
+    return formattedText;
+  }
+
+  /**
+   * Escape HTML special characters to prevent XSS
+   */
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  /**
+   * Track comment copy actions
+   */
+  private trackCopyAction(tone: string): void {
+    // Simple analytics tracking for copy action
+    this.logger.info(`User copied ${tone} comment`);
+    
+    // Send analytics to background script if needed
+    try {
+      chrome.runtime.sendMessage({
+        type: 'TRACK_EVENT',
+        event: 'comment_copy',
+        data: { tone }
+      });
+    } catch (e) {
+      // Ignore errors in analytics
+    }
   }
 }
