@@ -4,11 +4,17 @@ import { Logger } from '../services/Logger';
 // import { DOMUtils } from '../utils/DOMUtils';
 
 /**
+ * Type definition for comment length options
+ */
+export type CommentLength = 'very_short' | 'short' | 'medium' | 'long' | 'very_long';
+
+/**
  * CommentDisplay - UI component for displaying generated comments
  */
 export class CommentDisplay implements ICommentDisplay {
   private logger: Logger;
   private themeDetector: ThemeDetector;
+  private selectedLength: CommentLength = 'medium'; // Default length
   
   constructor() {
     this.logger = new Logger('CommentDisplay');
@@ -87,6 +93,10 @@ export class CommentDisplay implements ICommentDisplay {
     header.appendChild(closeButton);
     commentsUI.appendChild(header);
     
+    // Add length preference selector
+    const lengthPreferenceSection = this.createLengthPreferenceSelector(isDarkMode);
+    commentsUI.appendChild(lengthPreferenceSection);
+    
     // Create content
     const content = document.createElement('div');
     
@@ -103,6 +113,103 @@ export class CommentDisplay implements ICommentDisplay {
     
     // Add to DOM
     document.body.appendChild(commentsUI);
+  }
+  
+  /**
+   * Create length preference selector UI
+   * @param isDarkMode Whether dark mode is active
+   * @returns HTMLElement containing the length preference UI
+   */
+  private createLengthPreferenceSelector(isDarkMode: boolean): HTMLElement {
+    const container = document.createElement('div');
+    container.style.cssText = `
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid ${isDarkMode ? '#424242' : '#e0e0e0'};
+    `;
+    
+    // Label
+    const label = document.createElement('div');
+    label.textContent = 'Comment Length:';
+    label.style.cssText = `
+      font-size: 13px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      color: ${isDarkMode ? '#dfdfdf' : '#666'};
+    `;
+    container.appendChild(label);
+    
+    // Length options container
+    const optionsContainer = document.createElement('div');
+    optionsContainer.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    `;
+    
+    const lengthOptions: CommentLength[] = ['very_short', 'short', 'medium', 'long', 'very_long'];
+    
+    // Create each length option button
+    lengthOptions.forEach(length => {
+      const option = document.createElement('button');
+      const displayName = this.formatLengthName(length);
+      option.textContent = displayName;
+      
+      const isSelected = length === this.selectedLength;
+      option.style.cssText = `
+        background-color: ${isSelected 
+          ? (isDarkMode ? '#0073b1' : '#0a66c2') 
+          : (isDarkMode ? '#283339' : '#f5f5f5')};
+        color: ${isSelected 
+          ? 'white' 
+          : (isDarkMode ? '#a5a5a5' : '#666')};
+        border: 1px solid ${isSelected 
+          ? (isDarkMode ? '#0073b1' : '#0a66c2') 
+          : (isDarkMode ? '#424242' : '#e0e0e0')};
+        border-radius: 16px;
+        padding: 5px 0;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        flex: 1;
+        text-align: center;
+        transition: all 0.2s ease;
+      `;
+      
+      option.addEventListener('click', () => {
+        this.selectedLength = length;
+        // Here we would trigger regeneration with the new length
+        // This will be implemented in the next sub-step 14.2
+        
+        // Update visual selection
+        const buttons = optionsContainer.querySelectorAll('button');
+        buttons.forEach(btn => {
+          if (btn === option) {
+            btn.style.backgroundColor = isDarkMode ? '#0073b1' : '#0a66c2';
+            btn.style.color = 'white';
+            btn.style.borderColor = isDarkMode ? '#0073b1' : '#0a66c2';
+          } else {
+            btn.style.backgroundColor = isDarkMode ? '#283339' : '#f5f5f5';
+            btn.style.color = isDarkMode ? '#a5a5a5' : '#666';
+            btn.style.borderColor = isDarkMode ? '#424242' : '#e0e0e0';
+          }
+        });
+      });
+      
+      optionsContainer.appendChild(option);
+    });
+    
+    container.appendChild(optionsContainer);
+    return container;
+  }
+  
+  /**
+   * Format length name for display
+   * @param length The length option to format
+   * @returns Formatted display name
+   */
+  private formatLengthName(length: CommentLength): string {
+    return length.replace('_', ' ').replace(/\b\w/g, char => char.toUpperCase());
   }
   
   /**
