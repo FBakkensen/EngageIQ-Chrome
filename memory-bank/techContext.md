@@ -2,16 +2,35 @@
 
 ## Technologies Used
 
-[List the technologies used in the project]
+TypeScript, React, Tailwind CSS, Vite.
 
 ## Development Setup
 
-[Describe the development setup]
+VS Code, Node.js, npm.
 
 ## Technical Constraints
 
-[List the technical constraints]
+Browser compatibility, local storage limitations.
 
 ## Dependencies
 
-[List the dependencies]
+- react
+- react-dom
+- mobx
+- mobx-react-lite
+- @types/chrome
+- @types/react
+- @types/react-dom
+- @vitejs/plugin-react
+- @vitest/browser
+- @vitest/coverage-v8
+- autoprefixer
+- jest
+- playwright
+- postcss
+- storybook
+- tailwindcss
+- ts-jest
+- typescript
+- vite
+- vitest

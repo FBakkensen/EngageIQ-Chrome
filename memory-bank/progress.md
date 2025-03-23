@@ -2,16 +2,16 @@
 
 ## What Works
 
-[List what is currently working]
+Initial setup of the project, creation of basic UI components, and initialization of the memory bank.
 
 ## What's Left to Build
 
-[List what remains to be built]
+Comment injection functionality, comment storage and retrieval, post detection, theme application.
 
 ## Current Status
 
-[Describe the current status of the project]
+The project is in the initial setup phase.
 
 ## Known Issues
 
-[List any known issues]
+None.

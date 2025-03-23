@@ -2,16 +2,16 @@
 
 ## Current Work Focus
 
-[Describe the current work focus]
+Initializing the memory bank and updating the project brief, product context, system patterns, and tech context.
 
 ## Recent Changes
 
-[List the recent changes]
+Created the initial memory bank files and updated them with project information.
 
 ## Next Steps
 
-[Describe the next steps]
+Implement the comment injection functionality in the content script.
 
 ## Active Decisions and Considerations
 
-[List the active decisions and considerations]
+How to best detect relevant posts to inject the comment section into.
