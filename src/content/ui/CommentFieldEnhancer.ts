@@ -89,8 +89,8 @@ export class CommentFieldEnhancer {
     // Listen for comment generation completion
     this.setupMessageListener(button);
     
-    // Show the button if the field already has focus
-    if (document.activeElement === field || field.contains(document.activeElement)) {
+    // Show the button if the field already has focus AND no text
+    if ((document.activeElement === field || field.contains(document.activeElement)) && !this.hasTextContent(field)) {
       button.style.display = 'block';
     }
     
@@ -629,12 +629,8 @@ export class CommentFieldEnhancer {
           }
         }
         
-        // Show or hide based on field focus
-        if (document.activeElement === field || field.contains(document.activeElement)) {
-          newButton.style.display = 'block';
-        } else {
-          newButton.style.display = 'none';
-        }
+        // Always show the button regardless of field focus
+        newButton.style.display = 'block';
         
         // Log success
         this.logger.info(`Button (${fieldId}) reset from loading state successfully`);
@@ -767,6 +763,15 @@ export class CommentFieldEnhancer {
             !targetButton.querySelector('.engageiq-error-tooltip')) {
           this.showGenerationError(targetButton, message.payload.error);
         }
+        
+        // Check if the field has text before showing the button
+        const field = document.getElementById(message.payload.fieldId);
+        if (field) {
+          // If field has text, hide the button
+          if (this.hasTextContent(field)) {
+            targetButton.style.display = 'none';
+          }
+        }
       }
       
       // Reset generating flag
@@ -780,11 +785,68 @@ export class CommentFieldEnhancer {
    * Attach focus and blur events to manage button visibility
    */
   private attachFieldFocusEvents(button: HTMLElement, field: HTMLElement): void {
+    // Define hasTextContent here instead of duplicating
+    const hasTextContent = (): boolean => this.hasTextContent(field);
+
+    // Helper function to update button visibility
+    const updateButtonVisibility = (): void => {
+      // Get more detailed state information for logging
+      const isQuillEditor = field.classList.contains('ql-editor');
+      const hasQuillBlankClass = isQuillEditor && field.classList.contains('ql-blank');
+      
+      const nestedEditor = field.querySelector('.ql-editor');
+      const hasNestedQuillBlankClass = nestedEditor && nestedEditor.classList.contains('ql-blank');
+      
+      const fieldIsFocused = document.activeElement === field || field.contains(document.activeElement);
+      
+      // Special case for LinkedIn Quill editor - the ql-blank class is the most reliable indicator
+      if (hasQuillBlankClass || hasNestedQuillBlankClass || field.querySelector('.ql-blank')) {
+        this.logger.info('Quill editor is empty (has ql-blank class)');
+        if (fieldIsFocused) {
+          button.style.display = 'block';
+          this.logger.info('Field is focused and has ql-blank class, showing button');
+        }
+        return;
+      }
+      
+      // If field has text, hide button regardless of other conditions
+      const textCheckResult = hasTextContent();
+      this.logger.info('Text check result:', textCheckResult);
+      
+      if (textCheckResult) {
+        button.style.display = 'none';
+        this.logger.info('Field has text content, hiding button');
+        return;
+      }
+
+      // Otherwise show the button if field has focus
+      if (fieldIsFocused) {
+        button.style.display = 'block';
+        this.logger.info('Field focused without text, showing button');
+      } else {
+        this.logger.info('Field not focused and empty, button remains hidden');
+      }
+    };
+
     const handleShowButton = (e: Event) => {
       // Stop propagation to ensure consistent behavior
       e.stopPropagation();
       
-      // Immediately make button visible
+      // First check for ql-blank - LinkedIN specific highest priority check
+      if (field.classList.contains('ql-blank') || field.querySelector('.ql-blank')) {
+        button.style.display = 'block';
+        this.logger.info('Field has ql-blank class (definitely empty), showing button immediately');
+        return;
+      }
+      
+      // Check if there's text in the field
+      if (hasTextContent()) {
+        button.style.display = 'none';
+        this.logger.info('Field focused but has text, keeping button hidden');
+        return;
+      }
+      
+      // Immediately make button visible only if no text
       button.style.display = 'block';
       
       // Log for debugging
@@ -800,6 +862,13 @@ export class CommentFieldEnhancer {
       
       // Use a small delay to allow the click event to fire
       setTimeout(() => {
+        // Always hide if there's text in the field
+        if (hasTextContent()) {
+          button.style.display = 'none';
+          this.logger.info('Field has text, hiding button');
+          return;
+        }
+
         // Don't hide the button if it's currently generating a comment
         if (button.getAttribute('data-generating') === 'true') {
           return;
@@ -823,26 +892,119 @@ export class CommentFieldEnhancer {
       }, 150); // Slightly longer delay to ensure click has time to register
     };
     
+    // Track the previous content length to detect large deletions more reliably
+    let previousContentLength = field.textContent?.length || 0;
+    
+    // Handle text input events to hide button when typing starts or when all text is deleted
+    const handleTextInput = () => {
+      this.logger.info('Text input event fired for field', field.id);
+
+      // EXTREMELY HIGH PRIORITY CHECK: If field has ql-blank class now, show button immediately
+      if (field.classList.contains('ql-blank') || field.querySelector('.ql-blank')) {
+        this.logger.info('Field has ql-blank class after text input, definitely empty!');
+        // Check if field is focused before showing button
+        if (document.activeElement === field || field.contains(document.activeElement)) {
+          button.style.display = 'block';
+        }
+        return;
+      }
+      
+      // Store the current content length to compare with the previous one
+      const currentContentLength = field.textContent?.length || 0;
+      const contentLengthChange = previousContentLength - currentContentLength;
+      
+      // Update the previous content length for the next event
+      previousContentLength = currentContentLength;
+      
+      // Check for significant text removal (select-all-delete)
+      if (contentLengthChange > 5) { // More than 5 chars were deleted at once
+        this.handleSelectAllDelete(button, field, contentLengthChange);
+      }
+      
+      // Use the improved content analysis for regular input handling
+      const contentState = this.getActualContentWithoutPlaceholders(field);
+      
+      this.logger.info('Text input content analysis:', {
+        ...contentState,
+        fieldId: field.id,
+        isFieldFocused: document.activeElement === field || field.contains(document.activeElement)
+      });
+      
+      // Update button visibility based on content and focus
+      if (!contentState.hasRealContent) {
+        if (document.activeElement === field || field.contains(document.activeElement)) {
+          this.logger.info('Field has no real content and is focused, showing button');
+          button.style.display = 'block';
+        }
+      } else {
+        this.logger.info('Field has real content, hiding button');
+        button.style.display = 'none';
+      }
+    };
+    
     // Show button when the field or any element inside it is focused
     field.addEventListener('focusin', handleShowButton);
     
     // Hide button when focus leaves the field
     field.addEventListener('focusout', handleHideButton);
     
-    // Force button visibility on mousedown
-    button.addEventListener('mousedown', (e) => {
-      // Prevent defaults and stop propagation
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Log for debugging
-      this.logger.info('Button mousedown, ensuring visibility');
-      
-      // Force button visible state
-      this.isButtonClicking = true;
-      button.classList.add('engageiq-button-clicking');
-      button.style.display = 'block';
-    });
+    // Monitor text content changes
+    field.addEventListener('input', handleTextInput);
+    
+    // Initial check in case field already has content
+    updateButtonVisibility();
+  }
+  
+  /**
+   * Check if the field is a complex LinkedIn contenteditable field
+   * @deprecated - No longer used directly
+   */
+  /*
+  private isLinkedInComplexField(field: HTMLElement): boolean {
+    // Look for typical LinkedIn editor structures
+    const isContentEditable = field.getAttribute('contenteditable') === 'true';
+    const hasRoleTextbox = field.getAttribute('role') === 'textbox';
+    const hasCommentClass = field.classList.contains('comments-comment-box__text-editor') || 
+                          field.classList.contains('editor-content') ||
+                          field.classList.contains('ql-editor');
+    
+    return isContentEditable && (hasRoleTextbox || hasCommentClass);
+  }
+  */
+  
+  /**
+   * Helper to get all attributes of an element
+   */
+  private getElementAttributes(element: HTMLElement): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (let i = 0; i < element.attributes.length; i++) {
+      const attr = element.attributes[i];
+      result[attr.name] = attr.value;
+    }
+    return result;
+  }
+  
+  /**
+   * Helper to get a hierarchical representation of DOM structure
+   */
+  private getNodeStructure(node: HTMLElement, maxDepth: number = 2, currentDepth: number = 0): any {
+    if (currentDepth > maxDepth) {
+      return { truncated: true };
+    }
+    
+    const children = Array.from(node.children).map(child => 
+      this.getNodeStructure(child as HTMLElement, maxDepth, currentDepth + 1)
+    );
+    
+    return {
+      tagName: node.tagName,
+      className: node.className,
+      id: node.id,
+      attributes: this.getElementAttributes(node),
+      textContent: node.textContent?.trim(),
+      hasChildren: children.length > 0,
+      children: children.length > 0 ? children : undefined
+    };
   }
   
   /**
@@ -958,5 +1120,315 @@ export class CommentFieldEnhancer {
         }, 300);
       }
     }, 5000);
+  }
+
+  private hasTextContent(field: HTMLElement): boolean {
+    // ===== FAST CHECKS FOR LINKEDIN EDITOR =====
+    
+    // HIGHEST PRIORITY: If the field or ANY NESTED ELEMENT has ql-blank class, it's definitely empty
+    if (field.classList.contains('ql-blank')) {
+      this.logger.info('Field is Quill editor with ql-blank class, definitely empty');
+      return false;
+    }
+    
+    // Check any nested editor elements for ql-blank class
+    const blankEditors = field.querySelectorAll('.ql-blank');
+    if (blankEditors.length > 0) {
+      this.logger.info('Field contains element with ql-blank class, definitely empty', {
+        elements: Array.from(blankEditors).map(el => `${el.tagName}.${el.className}`)
+      });
+      return false;
+    }
+    
+    // Check parent container for ql-blank class (some LinkedIn editors have complex nesting)
+    let parent = field.parentElement;
+    for (let i = 0; parent && i < 3; i++) { // Check up to 3 levels up
+      const blankElements = parent.querySelectorAll('.ql-blank');
+      if (blankElements.length > 0) {
+        this.logger.info('Parent container has element with ql-blank class, definitely empty');
+        return false;
+      }
+      parent = parent.parentElement;
+    }
+    
+    // Check for empty structure - LinkedIn's empty pattern
+    const hasSingleBrElement = field.querySelector('p:only-child > br:only-child') !== null;
+    if (field.innerHTML.trim() === '<br>' || 
+        field.innerHTML.trim() === '<p><br></p>' ||
+        hasSingleBrElement) {
+      this.logger.info('Field has empty structure pattern');
+      return false;
+    }
+    
+    // ===== TEXT CHECKS =====
+    
+    // For standard inputs and textareas
+    if ('value' in field) {
+      const value = (field as HTMLInputElement).value.trim();
+      this.logger.info('Field value content:', JSON.stringify(value));
+      return value.length > 0;
+    }
+    
+    // Use our comprehensive placeholder detection system
+    const contentState = this.getActualContentWithoutPlaceholders(field);
+    
+    // Log the detailed analysis
+    this.logger.info('Content analysis result:', contentState);
+    
+    // Only return true if we have actual content that isn't placeholders
+    return contentState.hasRealContent;
+  }
+
+  /**
+   * Extracts actual text content from field, ignoring UI elements and placeholders
+   * This is specially designed to handle LinkedIn's complex placeholder structure
+   */
+  private getActualContentWithoutPlaceholders(field: HTMLElement): { 
+    hasRealContent: boolean, 
+    content: string,
+    hasPlaceholder: boolean 
+  } {
+    // Get raw text and trim it
+    const rawText = field.textContent || '';
+    const trimmedText = rawText.trim();
+    
+    // If nothing to check, return immediately
+    if (trimmedText.length === 0) {
+      return { hasRealContent: false, content: '', hasPlaceholder: false };
+    }
+    
+    this.logger.info('Content extraction:', {
+      raw: rawText.substring(0, 100),
+      trimmed: trimmedText.substring(0, 100)
+    });
+    
+    // 1. Check for UI elements to remove
+    const uiElements = [
+      'Åbn Emoji-keyboard', 'Open emoji keyboard', 'Abrir teclado de emojis', 
+      'Ouvrir le clavier emoji', 'Kommenter', 'Comment'
+    ];
+    
+    let contentWithoutUI = trimmedText;
+    uiElements.forEach(element => {
+      contentWithoutUI = contentWithoutUI.replace(element, '');
+    });
+    
+    // Trim again after removing UI elements
+    contentWithoutUI = contentWithoutUI.trim();
+    
+    // If we've removed everything, it was just UI elements
+    if (contentWithoutUI.length === 0) {
+      return { hasRealContent: false, content: '', hasPlaceholder: false };
+    }
+    
+    // 2. Check for known placeholders across languages
+    const placeholders = [
+      // Danish
+      'Tilføj en kommentar', 'Skriv en kommentar', 'Kommenter', 
+      // English
+      'Add a comment', 'Write a comment', 'Comment',
+      // Spanish
+      'Añadir un comentario', 'Escribir un comentario', 
+      // French
+      'Ajouter un commentaire', 'Écrire un commentaire',
+      // German
+      'Kommentar hinzufügen', 'Kommentar schreiben',
+      // Italian
+      'Aggiungi un commento', 'Scrivi un commento',
+      // Portuguese
+      'Adicionar um comentário', 'Escrever um comentário',
+      // Dutch
+      'Voeg een reactie toe', 'Schrijf een reactie',
+      // Swedish
+      'Lägg till en kommentar', 'Skriv en kommentar',
+      // Norwegian
+      'Legg til en kommentar', 'Skriv en kommentar',
+      // Finnish
+      'Lisää kommentti', 'Kirjoita kommentti'
+    ];
+    
+    // Check if any placeholders are contained in the content
+    let hasPlaceholder = false;
+    for (const placeholder of placeholders) {
+      if (contentWithoutUI.includes(placeholder)) {
+        this.logger.info('Found placeholder text:', placeholder);
+        hasPlaceholder = true;
+        // Remove the placeholder
+        contentWithoutUI = contentWithoutUI.replace(placeholder, '').trim();
+      }
+    }
+    
+    // 3. Check for placeholder-like patterns (ending with ellipsis, etc)
+    const hasEllipsis = contentWithoutUI.endsWith('…') || contentWithoutUI.endsWith('...');
+    if (hasEllipsis) {
+      this.logger.info('Content ends with ellipsis, likely a placeholder');
+      hasPlaceholder = true;
+    }
+    
+    // Special LinkedIn structure checks for blanks
+    const hasEmptyStructure = field.innerHTML.includes('<p><br></p>') || 
+                              field.innerHTML.includes('<br>') ||
+                              field.querySelector('p:only-child > br:only-child') !== null;
+    
+    // 4. After removing UI elements and placeholders, check if anything remains
+    const finalContent = contentWithoutUI.trim();
+    
+    // Extra check: if we have both a placeholder and remaining text, but the text is very short
+    // it's likely part of the placeholder system rather than actual content
+    if (hasPlaceholder && finalContent.length < 5) {
+      return { hasRealContent: false, content: finalContent, hasPlaceholder: true };
+    }
+    
+    // Analyze what we found
+    return {
+      hasRealContent: finalContent.length > 0 && !hasEmptyStructure,
+      content: finalContent,
+      hasPlaceholder: hasPlaceholder || hasEmptyStructure
+    };
+  }
+
+  /**
+   * Handles text input events for select-all-delete detection
+   * @param button The Generate Comment button
+   * @param field The comment field 
+   * @param prevContentLength Previous content length for change detection
+   */
+  private handleSelectAllDelete(button: HTMLElement, field: HTMLElement, contentLengthChange: number): void {
+    // Only process significant deletions (more than a few characters)
+    if (contentLengthChange <= 5) {
+      return;
+    }
+    
+    this.logger.info('Significant content deletion detected', {
+      change: contentLengthChange,
+      fieldId: field.id
+    });
+    
+    // 1. Immediate check for blank state
+    const hasEmptyIndicator = field.classList.contains('ql-blank') || 
+                           !!field.querySelector('.ql-blank') ||
+                           field.innerHTML.includes('<p><br></p>');
+    
+    // 2. Check for real content vs placeholder                       
+    const contentState = this.getActualContentWithoutPlaceholders(field);
+    
+    this.logger.info('Select-all-delete content analysis:', {
+      hasEmptyIndicator,
+      ...contentState,
+      isFieldFocused: document.activeElement === field || field.contains(document.activeElement)
+    });
+    
+    // If no real content and field is focused, show button immediately
+    if (!contentState.hasRealContent && (document.activeElement === field || field.contains(document.activeElement))) {
+      this.logger.info('Field is empty after delete operation, showing button');
+      button.style.display = 'block';
+      return;
+    }
+    
+    // 3. Set up aggressive checks at different intervals to catch delayed blank state
+    const checkTimes = [10, 30, 50, 100, 150, 200, 300, 500, 800, 1000, 1500];
+    
+    // Schedule all the checks at once, with fast early checks and slower later checks
+    checkTimes.forEach(delay => {
+      setTimeout(() => {
+        // Always re-get the focus state to account for changes
+        const isCurrentlyFocused = document.activeElement === field || field.contains(document.activeElement);
+        
+        // HIGHEST PRIORITY: Check for blank class which is most reliable
+        const hasBlankClass = field.classList.contains('ql-blank') || !!field.querySelector('.ql-blank');
+        
+        // Re-check content state
+        const currentContent = this.getActualContentWithoutPlaceholders(field);
+        
+        this.logger.info(`Select-all-delete check (${delay}ms):`, {
+          hasBlankClass,
+          isCurrentlyFocused,
+          ...currentContent
+        });
+        
+        // Check 1: If we have the blank class indicator AND field is focused, show button
+        if (hasBlankClass && isCurrentlyFocused) {
+          this.logger.info(`${delay}ms check: Field has blank class and focus, showing button`);
+          button.style.display = 'block';
+          return;
+        }
+        
+        // Check 2: If we have no real content AND field is focused, show button
+        if (!currentContent.hasRealContent && isCurrentlyFocused) {
+          this.logger.info(`${delay}ms check: Field has no real content and focus, showing button`);
+          button.style.display = 'block';
+        }
+      }, delay);
+    });
+    
+    // Set up mutation observer to detect class changes
+    const observer = new MutationObserver((mutations) => {
+      let shouldShowButton = false;
+      let blankClassFound = false;
+      
+      for (const mutation of mutations) {
+        // Log the mutations to help debug
+        if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
+          const target = mutation.target as HTMLElement;
+          this.logger.info('MUTATION OBSERVER: Class attribute changed on element:', {
+            element: target.tagName, 
+            classes: target.className,
+            hasBlankClass: target.classList.contains('ql-blank')
+          });
+          
+          // If the ql-blank class was added to any element, show the button
+          if (target.classList.contains('ql-blank')) {
+            shouldShowButton = true;
+            blankClassFound = true;
+          }
+        }
+      }
+      
+      // Perform a full check for ql-blank anywhere in the field
+      if (!blankClassFound) {
+        const hasBlankAnywhere = field.classList.contains('ql-blank') || !!field.querySelector('.ql-blank');
+        if (hasBlankAnywhere) {
+          shouldShowButton = true;
+          this.logger.info('MUTATION OBSERVER: ql-blank class found in field after mutations');
+        }
+      }
+      
+      // If field is empty and still has focus, show the button
+      if (shouldShowButton && (document.activeElement === field || field.contains(document.activeElement))) {
+        this.logger.info('MUTATION OBSERVER: ql-blank class detected and field is focused, showing button');
+        button.style.display = 'block';
+      }
+    });
+    
+    // Start observing the field and any related elements for class changes
+    const elementsToObserve = [field];
+    
+    // Add all nested editor elements
+    const nestedEditors = field.querySelectorAll('.ql-editor');
+    nestedEditors.forEach(editor => elementsToObserve.push(editor as HTMLElement));
+    
+    // Check parent elements up to 3 levels
+    let parent = field.parentElement;
+    for (let i = 0; parent && i < 3; i++) {
+      elementsToObserve.push(parent);
+      const parentEditors = parent.querySelectorAll('.ql-editor');
+      parentEditors.forEach(editor => elementsToObserve.push(editor as HTMLElement));
+      parent = parent.parentElement;
+    }
+    
+    // Start observing all the collected elements
+    elementsToObserve.forEach(element => {
+      observer.observe(element, { 
+        attributes: true, 
+        attributeFilter: ['class'],
+        subtree: true, // Also observe all descendants
+        childList: true // Observe DOM changes which might add/remove elements with ql-blank
+      });
+    });
+    
+    // Set timeout to disconnect observer after 3 seconds
+    setTimeout(() => {
+      observer.disconnect();
+    }, 3000);
   }
 }

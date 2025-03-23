@@ -17,7 +17,7 @@ export class CommentDisplay implements ICommentDisplay {
   private selectedLength: CommentLength = 'medium'; // Temporary preference for current popup only
   private savedUserPreference: CommentLength = 'medium'; // Persistent user preference stored in Chrome storage
   private _isRegenerating: boolean = false;
-  private _debugMode: boolean = false; // Disable debug logs
+  private _debugMode: boolean = false; // Disable debug logs for production
   private _pendingLengthSelection: CommentLength | null = null; // Store pending selection
   
   constructor() {
@@ -411,18 +411,71 @@ export class CommentDisplay implements ICommentDisplay {
     closeButton.addEventListener('click', () => {
       // Get the Generate Comment button associated with this field
       const generateButton = document.querySelector(`button[data-field-id="${fieldId}"]`) as HTMLElement;
-      if (generateButton) {
-        // Don't set display:block here, just reset the styles
-        // The visibility will be controlled by field focus
+      // Get the field element to potentially re-focus on it
+      const field = document.getElementById(fieldId);
+      
+      if (generateButton && field) {
+        // Helper function to check if field has text content
+        const hasTextContent = (): boolean => {
+          // For standard inputs and textareas
+          if ('value' in field) {
+            const value = (field as HTMLInputElement).value.trim();
+            this.logger.info('Field value content:', JSON.stringify(value));
+            return value.length > 0;
+          }
+          
+          // For contenteditable elements - check LinkedIn specific structure first
+          if (this.isLinkedInComplexField(field)) {
+            const result = this.checkLinkedInFieldContent(field);
+            this.logger.info('LinkedIn complex field check:', result);
+            return result.hasText;
+          }
+          
+          // Standard contenteditable check - use structural detection
+          const textContent = field.textContent || '';
+          
+          // Strip all whitespace to see if there's any real content
+          const strippedContent = textContent.replace(/\s+/g, '');
+          
+          // Debug what's actually in the field
+          this.logger.info('Field text content:', JSON.stringify(textContent));
+          
+          // If it's empty after stripping whitespace
+          if (strippedContent === '' || strippedContent === '…') {
+            this.logger.info('Field content is empty or only contains ellipsis');
+            return false;
+          }
+          
+          // Check for styling suggesting placeholder text
+          try {
+            const computedStyle = window.getComputedStyle(field);
+            if (computedStyle.color.includes('128') || // Various gray colors
+                computedStyle.fontStyle === 'italic' ||
+                computedStyle.opacity !== '1') {
+              this.logger.info('Field has placeholder styling');
+              return false;
+            }
+          } catch (e) {
+            // Ignore styling errors
+          }
+          
+          return strippedContent.length > 0;
+        };
+        
+        // Only make the button visible if there's no text in the field
+        if (!hasTextContent()) {
+          generateButton.style.display = 'block';
+        } else {
+          generateButton.style.display = 'none';
+          this.logger.info('Field has text, keeping button hidden after popup closure');
+        }
+        
         generateButton.removeAttribute('data-generating');
         
         // Reset tooltip visibility
         this.resetTooltipState(generateButton);
         this.logger.info('Reset Generate Comment button on popup closure');
       }
-      
-      // Get the field element to potentially re-focus on it
-      const field = document.getElementById(fieldId);
       
       // Remove the popup
       commentsUI.remove();
@@ -686,14 +739,15 @@ export class CommentDisplay implements ICommentDisplay {
           
           // Get the Generate Comment button associated with this field
           const generateButton = document.querySelector(`button[data-field-id="${fieldId}"]`) as HTMLElement;
+          
+          // After comment insertion, there will be text in the field, so always hide the button
           if (generateButton) {
-            // Don't set display:block here, just reset the styles
-            // The visibility will be controlled by field focus
+            generateButton.style.display = 'none';
             generateButton.removeAttribute('data-generating');
             
             // Reset tooltip visibility
             this.resetTooltipState(generateButton);
-            this.logger.info('Reset Generate Comment button on comment insertion');
+            this.logger.info('Button hidden after comment insertion since field has text');
           }
           
           // Get the field element to potentially re-focus on it
@@ -758,9 +812,65 @@ export class CommentDisplay implements ICommentDisplay {
             if (node === commentsUI || (node as Element).contains(commentsUI)) {
               // Get the Generate Comment button associated with this field
               const generateButton = document.querySelector(`button[data-field-id="${fieldId}"]`) as HTMLElement;
-              if (generateButton) {
-                // Don't set display:block here, just reset the styles
-                // The visibility will be controlled by field focus
+              // Get the field element to check for text content
+              const field = document.getElementById(fieldId);
+              
+              if (generateButton && field) {
+                // Helper function to check if field has text content
+                const hasTextContent = (): boolean => {
+                  // For standard inputs and textareas
+                  if ('value' in field) {
+                    const value = (field as HTMLInputElement).value.trim();
+                    this.logger.info('Field value content:', JSON.stringify(value));
+                    return value.length > 0;
+                  }
+                  
+                  // For contenteditable elements - check LinkedIn specific structure first
+                  if (this.isLinkedInComplexField(field)) {
+                    const result = this.checkLinkedInFieldContent(field);
+                    this.logger.info('LinkedIn complex field check:', result);
+                    return result.hasText;
+                  }
+                  
+                  // Standard contenteditable check - use structural detection
+                  const textContent = field.textContent || '';
+                  
+                  // Strip all whitespace to see if there's any real content
+                  const strippedContent = textContent.replace(/\s+/g, '');
+                  
+                  // Debug what's actually in the field
+                  this.logger.info('Field text content:', JSON.stringify(textContent));
+                  
+                  // If it's empty after stripping whitespace
+                  if (strippedContent === '' || strippedContent === '…') {
+                    this.logger.info('Field content is empty or only contains ellipsis');
+                    return false;
+                  }
+                  
+                  // Check for styling suggesting placeholder text
+                  try {
+                    const computedStyle = window.getComputedStyle(field);
+                    if (computedStyle.color.includes('128') || // Various gray colors
+                        computedStyle.fontStyle === 'italic' ||
+                        computedStyle.opacity !== '1') {
+                      this.logger.info('Field has placeholder styling');
+                      return false;
+                    }
+                  } catch (e) {
+                    // Ignore styling errors
+                  }
+                  
+                  return strippedContent.length > 0;
+                };
+                
+                // Only make the button visible if there's no text in the field
+                if (!hasTextContent()) {
+                  generateButton.style.display = 'block';
+                } else {
+                  generateButton.style.display = 'none';
+                  this.logger.info('Field has text, keeping button hidden after popup removal');
+                }
+                
                 generateButton.removeAttribute('data-generating');
                 
                 // Reset tooltip visibility
@@ -1568,40 +1678,9 @@ export class CommentDisplay implements ICommentDisplay {
   /**
    * Add a debug button to force refresh styling
    */
-  private addDebugRefreshButton(container: HTMLElement, buttons: HTMLButtonElement[], isDarkMode: boolean): void {
-    if (!this._debugMode) return;
-    
-    const debugButtonContainer = document.createElement('div');
-    debugButtonContainer.style.cssText = `
-      margin-top: 10px;
-      text-align: center;
-    `;
-    
-    const refreshButton = document.createElement('button');
-    refreshButton.textContent = 'Debug: Refresh Buttons';
-    refreshButton.style.cssText = `
-      background-color: ${isDarkMode ? '#ff5722' : '#ff9800'};
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 4px 8px;
-      font-size: 10px;
-      cursor: pointer;
-    `;
-    
-    refreshButton.addEventListener('click', () => {
-      this.debugLog('Debug refresh clicked, current selectedLength:', this.selectedLength);
-      
-      buttons.forEach(btn => {
-        const btnLength = btn.dataset.length as CommentLength;
-        const shouldBeSelected = btnLength === this.selectedLength;
-        this.debugLog(`Refreshing button "${btn.textContent}": shouldBeSelected=${shouldBeSelected}, btnLength=${btnLength}`);
-        this.applyButtonStyle(btn, shouldBeSelected, isDarkMode);
-      });
-    });
-    
-    debugButtonContainer.appendChild(refreshButton);
-    container.appendChild(debugButtonContainer);
+  private addDebugRefreshButton(_container: HTMLElement, _buttons: HTMLButtonElement[], _isDarkMode: boolean): void {
+    // Debug button removed for production - no-op function
+    return;
   }
 
   /**
@@ -1718,5 +1797,388 @@ export class CommentDisplay implements ICommentDisplay {
     } catch (e) {
       // Ignore errors in analytics
     }
+  }
+
+  /**
+   * Check if the field is a complex LinkedIn contenteditable field
+   */
+  private isLinkedInComplexField(field: HTMLElement): boolean {
+    // Look for typical LinkedIn editor structures
+    const isContentEditable = field.getAttribute('contenteditable') === 'true';
+    const hasRoleTextbox = field.getAttribute('role') === 'textbox';
+    const hasCommentClass = field.classList.contains('comments-comment-box__text-editor') || 
+                          field.classList.contains('editor-content') ||
+                          field.classList.contains('ql-editor');
+    
+    return isContentEditable && (hasRoleTextbox || hasCommentClass);
+  }
+  
+  /**
+   * Check LinkedIn complex field content
+   * Returns an object with the content analysis
+   */
+  private checkLinkedInFieldContent(field: HTMLElement): { hasText: boolean, content: string, reason: string } {
+    // ======== DEEP DIAGNOSTIC LOGGING FOR FIELD DETECTION ========
+    this.debugLog('===== FIELD DETECTION DIAGNOSTICS =====');
+    
+    // 1. Log field basics
+    this.debugLog('Field properties:', {
+      id: field.id,
+      tagName: field.tagName,
+      className: field.className,
+      role: field.getAttribute('role'),
+      contenteditable: field.getAttribute('contenteditable'),
+      ariaLabel: field.getAttribute('aria-label'),
+      childNodeCount: field.childNodes.length,
+      innerHTML: field.innerHTML.substring(0, 200) + (field.innerHTML.length > 200 ? '...' : '')
+    });
+    
+    // 2. Log DOM structure for debugging
+    this.debugLog('Field DOM structure:', this.getNodeStructure(field));
+    
+    // CRITICAL: First check this field and any parent/child Quill editors
+    // for the ql-blank class which is the definitive empty indicator
+    
+    // A. Check if this is a Quill editor
+    const isQuillEditor = field.classList.contains('ql-editor');
+    this.debugLog('Is Quill editor?', isQuillEditor);
+    
+    if (isQuillEditor) {
+      const hasBlankClass = field.classList.contains('ql-blank');
+      this.debugLog('Quill editor has ql-blank class?', hasBlankClass);
+      
+      if (hasBlankClass) {
+        // In Quill, a blank class means the field is definitely empty
+        this.debugLog('Field is empty (ql-blank class on Quill editor)');
+        return { hasText: false, content: '', reason: 'quill-blank-class' };
+      }
+    }
+    
+    // B. Look for Quill editor inside our field (if we're not already a Quill editor)
+    if (!isQuillEditor) {
+      const nestedQuillEditor = field.querySelector('.ql-editor');
+      if (nestedQuillEditor) {
+        const nestedHasBlankClass = nestedQuillEditor.classList.contains('ql-blank');
+        this.debugLog('Nested Quill editor found with ql-blank class?', nestedHasBlankClass);
+        
+        if (nestedHasBlankClass) {
+          this.debugLog('Field is empty (nested ql-blank class)');
+          return { hasText: false, content: '', reason: 'nested-quill-blank-class' };
+        }
+      }
+    }
+    
+    // C. Look for parent Quill container
+    let parent = field.parentElement;
+    let foundQuillContainer = false;
+    let isQuillBlank = false;
+    
+    while (parent && !foundQuillContainer && parent.nodeType === Node.ELEMENT_NODE) {
+      if (parent.classList && parent.classList.contains('ql-container')) {
+        foundQuillContainer = true;
+        
+        // Find the editor within the container
+        const quillEditor = parent.querySelector('.ql-editor');
+        if (quillEditor) {
+          isQuillBlank = quillEditor.classList.contains('ql-blank');
+          this.debugLog('Parent Quill container found with editor having ql-blank class?', isQuillBlank);
+        }
+      }
+      parent = parent.parentElement;
+    }
+    
+    if (foundQuillContainer && isQuillBlank) {
+      this.debugLog('Field is empty (parent quill container with ql-blank editor)');
+      return { hasText: false, content: '', reason: 'parent-quill-blank-class' };
+    }
+    
+    // D. Check if there's an ancestor/sibling with ql-blank class within 3 levels
+    const hasNearbyBlankQuillEditor = (): boolean => {
+      // Check if there's a ql-blank editor nearby - going up to parent siblings
+      let current: HTMLElement | null = field;
+      for (let i = 0; i < 3 && current; i++) { // Check up to 3 levels up
+        // Check siblings of this element
+        if (current.parentElement) {
+          const siblings = Array.from(current.parentElement.children);
+          for (const sibling of siblings) {
+            // Check if sibling is a quill editor or contains one
+            if (sibling.classList && sibling.classList.contains('ql-editor') && 
+                sibling.classList.contains('ql-blank')) {
+              return true;
+            }
+            
+            const siblingQuillEditor = sibling.querySelector('.ql-editor.ql-blank');
+            if (siblingQuillEditor) {
+              return true;
+            }
+          }
+        }
+        
+        current = current.parentElement;
+      }
+      
+      return false;
+    };
+    
+    if (hasNearbyBlankQuillEditor()) {
+      this.debugLog('Field is empty (nearby ql-blank editor)');
+      return { hasText: false, content: '', reason: 'nearby-quill-blank' };
+    }
+    
+    // ONLY proceed with content checks if we haven't identified an empty field by structure
+    
+    // 3. Find all text nodes and their content
+    const textNodes: {text: string, visible: boolean, path: string}[] = [];
+    const findTextNodes = (node: Node, path: string = 'root') => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent?.trim() || '';
+        if (text) {
+          // Check if node is visible
+          let visible = true;
+          if (node.parentElement) {
+            const style = window.getComputedStyle(node.parentElement);
+            visible = style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+          }
+          textNodes.push({text, visible, path});
+        }
+      } else {
+        node.childNodes.forEach((child, i) => {
+          findTextNodes(child, `${path}>${i}`);
+        });
+      }
+    };
+    findTextNodes(field);
+    this.debugLog('Text nodes found:', textNodes);
+    
+    // 4. Check for placeholder attributes on field and nested elements
+    const placeholderAttributeElements: {element: string, attribute: string, value: string}[] = [];
+    const placeholderAttributes = ['data-placeholder', 'aria-placeholder', 'data-placeholder-content', 'placeholder'];
+    
+    // Check field itself
+    placeholderAttributes.forEach(attr => {
+      const value = field.getAttribute(attr);
+      if (value) {
+        placeholderAttributeElements.push({
+          element: `${field.tagName}#${field.id || 'no-id'}.${field.className}`,
+          attribute: attr,
+          value
+        });
+      }
+    });
+    
+    // Check children
+    const findPlaceholderAttributes = (node: Element) => {
+      placeholderAttributes.forEach(attr => {
+        const value = node.getAttribute(attr);
+        if (value) {
+          placeholderAttributeElements.push({
+            element: `${node.tagName}#${node.id || 'no-id'}.${node.className}`,
+            attribute: attr,
+            value
+          });
+        }
+      });
+      
+      Array.from(node.children).forEach(findPlaceholderAttributes);
+    };
+    
+    Array.from(field.children).forEach(findPlaceholderAttributes);
+    this.debugLog('Placeholder attributes found:', placeholderAttributeElements);
+    
+    // 5. Check for a11y-text spans and placeholder elements
+    const placeholderElements: {element: string, class: string, content: string, visible: boolean}[] = [];
+    const placeholderClasses = ['placeholder', 'ql-placeholder', 'ghost-text', 'hint', 'a11y-text', 'placeholder-text'];
+    
+    // Extended to search in parent container too, not just in the field
+    const findPlaceholderElements = (node: Element, searchParent: boolean = false) => {
+      // Check if this element has a placeholder class
+      const matchingClass = Array.from(node.classList || []).find(cls => 
+        placeholderClasses.some(placeholderCls => cls.includes(placeholderCls))
+      );
+      
+      if (matchingClass) {
+        const style = window.getComputedStyle(node);
+        const visible = style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0';
+        
+        placeholderElements.push({
+          element: `${node.tagName}#${node.id || 'no-id'}.${node.className}`,
+          class: matchingClass,
+          content: node.textContent || '',
+          visible
+        });
+      }
+      
+      // Also check siblings in the parent container if requested
+      if (searchParent && node.parentElement) {
+        Array.from(node.parentElement.children).forEach(child => {
+          if (child !== node) { // Avoid processing the original node twice
+            findPlaceholderElements(child, false); 
+          }
+        });
+      }
+      
+      Array.from(node.children).forEach(child => findPlaceholderElements(child, false));
+    };
+    
+    // Search in the field and also in parent container for a11y elements
+    findPlaceholderElements(field, true);
+    this.debugLog('Placeholder elements found:', placeholderElements);
+    
+    // 6. Check for style-based placeholder identification
+    const hasGreyOrItalicChildren: {element: string, color: string, fontStyle: string, opacity: string}[] = [];
+    
+    const findStyledElements = (node: Element) => {
+      const style = window.getComputedStyle(node);
+      const color = style.color;
+      const fontStyle = style.fontStyle;
+      const opacity = style.opacity;
+      
+      // Check if this has placeholder-like styling (grey text, italic, or reduced opacity)
+      const isGreyish = color.includes('rgb(1') || color.includes('rgb(2') || color.includes('rgba(1') || color.includes('rgba(2') || color.includes('gray') || color.includes('grey');
+      const isItalic = fontStyle === 'italic';
+      const isReducedOpacity = parseFloat(opacity) < 1.0;
+      
+      if (isGreyish || isItalic || isReducedOpacity) {
+        hasGreyOrItalicChildren.push({
+          element: `${node.tagName}#${node.id || 'no-id'}.${node.className}`,
+          color,
+          fontStyle,
+          opacity
+        });
+      }
+      
+      Array.from(node.children).forEach(findStyledElements);
+    };
+    
+    findStyledElements(field);
+    this.debugLog('Elements with placeholder-like styling:', hasGreyOrItalicChildren);
+    
+    // 7. Check if field has a simple empty structure (like <p><br></p>)
+    const isSingleBrStructure = 
+      field.innerHTML.trim() === '<br>' || 
+      field.innerHTML.trim() === '<p><br></p>' ||
+      (field.children.length === 1 && 
+       field.firstElementChild?.tagName === 'P' && 
+       field.firstElementChild.innerHTML.trim() === '<br>');
+    
+    this.debugLog('Field has empty structure?', isSingleBrStructure);
+    
+    if (isSingleBrStructure) {
+      this.debugLog('Field is empty based on structure');
+      return { hasText: false, content: '', reason: 'empty-field-structure' };
+    }
+    
+    // Extract and analyze text content
+    let textContent = field.textContent || '';
+    const trimmedContent = textContent.trim();
+    this.debugLog('Field trimmed content:', JSON.stringify(trimmedContent));
+    
+    // Remove UI text related to emoji keyboard
+    const emojiKeyboardTexts = ['Åbn Emoji-keyboard', 'Open emoji keyboard', 'Abrir teclado de emojis', 'Ouvrir le clavier emoji'];
+    let contentAfterRemovingUI = trimmedContent;
+    
+    // Remove all emoji keyboard texts
+    emojiKeyboardTexts.forEach(text => {
+      contentAfterRemovingUI = contentAfterRemovingUI.replace(text, '');
+    });
+    
+    // Re-trim after removal
+    contentAfterRemovingUI = contentAfterRemovingUI.trim();
+    this.debugLog('Content after removing UI texts:', JSON.stringify(contentAfterRemovingUI));
+    
+    // If we have no content after removing UI text, consider it empty
+    if (!contentAfterRemovingUI) {
+      this.debugLog('Field has only UI element text');
+      return { hasText: false, content: '', reason: 'only-ui-text' };
+    }
+    
+    // Handle known placeholder texts
+    const knownPlaceholders = [
+      'Tilføj en kommentar',   // Danish
+      'Add a comment',         // English
+      'Write a comment',       // English alternative
+      'Añadir un comentario',  // Spanish
+      'Ajouter un commentaire' // French
+    ];
+    
+    for (const placeholder of knownPlaceholders) {
+      if (contentAfterRemovingUI.includes(placeholder)) {
+        this.debugLog('Content matches known placeholder text:', placeholder);
+        return { hasText: false, content: '', reason: 'known-placeholder-text' };
+      }
+    }
+    
+    // Check for placeholder text from attributes
+    // Get all placeholder values from the attributes we found
+    const placeholderTextCandidates = placeholderAttributeElements.map(item => item.value);
+    const nearbyPlaceholderText = placeholderElements.map(item => item.content).filter(text => text);
+    
+    // Create a combined list of potential placeholder texts
+    const allPlaceholderCandidates = [...placeholderTextCandidates, ...nearbyPlaceholderText];
+    this.debugLog('All placeholder candidates:', allPlaceholderCandidates);
+    
+    // Check if content matches any placeholder
+    for (const placeholder of allPlaceholderCandidates) {
+      if (placeholder && contentAfterRemovingUI.includes(placeholder)) {
+        this.debugLog('Content includes placeholder text:', placeholder);
+        return { hasText: false, content: '', reason: 'placeholder-match' };
+      }
+    }
+    
+    // Check if content ends with ellipsis, it might be a placeholder
+    if (contentAfterRemovingUI.endsWith('…') || contentAfterRemovingUI.endsWith('...')) {
+      this.debugLog('Content ends with ellipsis, likely a placeholder');
+      return { hasText: false, content: '', reason: 'ellipsis-ending' };
+    }
+    
+    // If we have grey/italic styled elements that match our content, it's likely a placeholder
+    if (hasGreyOrItalicChildren.length > 0) {
+      const styledText = textNodes.filter(node => node.visible).map(node => node.text).join(' ');
+      this.debugLog('Styled text content:', JSON.stringify(styledText));
+      
+      if (styledText === contentAfterRemovingUI) {
+        this.debugLog('Content is all styled like a placeholder');
+        return { hasText: false, content: '', reason: 'styled-as-placeholder' };
+      }
+    }
+    
+    // If we get here, the field likely has actual user-entered content
+    this.debugLog('Field appears to have real content');
+    return { hasText: true, content: contentAfterRemovingUI, reason: 'has-content' };
+  }
+  
+  /**
+   * Helper to get a hierarchical representation of DOM structure
+   */
+  private getNodeStructure(node: HTMLElement, maxDepth: number = 2, currentDepth: number = 0): any {
+    if (currentDepth > maxDepth) {
+      return { truncated: true };
+    }
+    
+    const children = Array.from(node.children).map(child => 
+      this.getNodeStructure(child as HTMLElement, maxDepth, currentDepth + 1)
+    );
+    
+    return {
+      tagName: node.tagName,
+      className: node.className,
+      id: node.id,
+      attributes: this.getElementAttributes(node),
+      textContent: node.textContent?.trim(),
+      hasChildren: children.length > 0,
+      children: children.length > 0 ? children : undefined
+    };
+  }
+  
+  /**
+   * Helper to get all attributes of an element
+   */
+  private getElementAttributes(element: HTMLElement): Record<string, string> {
+    const result: Record<string, string> = {};
+    for (let i = 0; i < element.attributes.length; i++) {
+      const attr = element.attributes[i];
+      result[attr.name] = attr.value;
+    }
+    return result;
   }
 }
