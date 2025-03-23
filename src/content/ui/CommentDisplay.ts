@@ -485,14 +485,28 @@ export class CommentDisplay implements ICommentDisplay {
     
     // Add click handler to restore the button when closing
     closeButton.addEventListener('click', () => {
-      // Show the Generate Comment button again
+      // Get the Generate Comment button associated with this field
+      const generateButton = document.querySelector(`button[data-field-id="${fieldId}"]`) as HTMLElement;
       if (generateButton) {
-        this.restoreGenerateButton(generateButton);
-        this.logger.info('Restored Generate Comment button visibility');
+        // Don't set display:block here, just reset the styles
+        // The visibility will be controlled by field focus
+        generateButton.removeAttribute('data-generating');
+        
+        // Reset tooltip visibility
+        this.resetTooltipState(generateButton);
+        this.logger.info('Reset Generate Comment button on popup closure');
       }
+      
+      // Get the field element to potentially re-focus on it
+      const field = document.getElementById(fieldId);
       
       // Remove the popup
       commentsUI.remove();
+      
+      // Re-focus the comment field to make the button appear if needed
+      if (field) {
+        field.focus();
+      }
     });
     
     header.appendChild(title);
@@ -717,17 +731,28 @@ export class CommentDisplay implements ICommentDisplay {
           });
           document.dispatchEvent(insertEvent);
           
-          // Restore the Generate Comment button before closing
+          // Get the Generate Comment button associated with this field
           const generateButton = document.querySelector(`button[data-field-id="${fieldId}"]`) as HTMLElement;
           if (generateButton) {
-            generateButton.style.display = 'block';
-            // Use improved tooltip reset method
+            // Don't set display:block here, just reset the styles
+            // The visibility will be controlled by field focus
+            generateButton.removeAttribute('data-generating');
+            
+            // Reset tooltip visibility
             this.resetTooltipState(generateButton);
-            this.logger.info('Restored Generate Comment button on comment insertion');
+            this.logger.info('Reset Generate Comment button on comment insertion');
           }
+          
+          // Get the field element to potentially re-focus on it
+          const field = document.getElementById(fieldId);
           
           // Close the comment UI
           commentsUI.remove();
+          
+          // Re-focus the comment field to make the button appear if needed
+          if (field) {
+            field.focus();
+          }
         } catch (error) {
           console.error('⭐ CommentDisplay: Error inserting comment:', error);
         }
@@ -777,10 +802,16 @@ export class CommentDisplay implements ICommentDisplay {
         if (mutation.type === 'childList') {
           for (const node of Array.from(mutation.removedNodes)) {
             if (node === commentsUI || (node as Element).contains(commentsUI)) {
-              // Show the Generate Comment button again
+              // Get the Generate Comment button associated with this field
+              const generateButton = document.querySelector(`button[data-field-id="${fieldId}"]`) as HTMLElement;
               if (generateButton) {
-                this.restoreGenerateButton(generateButton);
-                this.logger.info('Restored Generate Comment button on popup removal');
+                // Don't set display:block here, just reset the styles
+                // The visibility will be controlled by field focus
+                generateButton.removeAttribute('data-generating');
+                
+                // Reset tooltip visibility
+                this.resetTooltipState(generateButton);
+                this.logger.info('Reset Generate Comment button on popup removal');
               }
               
               // Disconnect the observer as it's no longer needed
@@ -1485,8 +1516,8 @@ export class CommentDisplay implements ICommentDisplay {
   }
   
   /**
-   * Reset tooltip state to ensure it's hidden
-   * @param button The button element containing the tooltip
+   * Reset the "Generate Comment" button styles without changing visibility
+   * @param button The button to reset
    */
   private resetTooltipState(button: HTMLElement): void {
     // First try to find the tooltip within any span element
@@ -1505,37 +1536,6 @@ export class CommentDisplay implements ICommentDisplay {
       tooltip.style.opacity = '0';
       tooltip.style.visibility = 'hidden';
     }
-  }
-
-  /**
-   * Restore the "Generate Comment" button when popup is closed
-   * @param button The button to restore
-   */
-  private restoreGenerateButton(button: HTMLElement): void {
-    if (!button) return;
-    
-    // Always start with display:block to ensure visibility
-    button.style.display = 'block';
-    
-    // Ensure all critical styles are set directly
-    button.style.backgroundColor = '#0a66c2';
-    button.style.color = 'white';
-    button.style.cursor = 'pointer';
-    button.style.opacity = '1';
-    button.style.zIndex = '9999';
-    button.style.position = 'absolute';
-    button.style.width = '32px';
-    button.style.height = '32px';
-    button.style.borderRadius = '50%';
-    button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
-    
-    // Reset any transform that might have been applied
-    button.style.transform = 'scale(1)';
-    
-    // Ensure tooltip is hidden
-    this.resetTooltipState(button);
-    
-    this.logger.info('Fully restored Generate Comment button');
   }
 
   /**

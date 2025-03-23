@@ -8,6 +8,7 @@ import { CommentLength } from './CommentDisplay';
 export class CommentFieldEnhancer {
   private logger: Logger;
   private isGenerating: boolean = false;
+  private isButtonClicking: boolean = false; // Track when button is being clicked
   
   constructor() {
     this.logger = new Logger('CommentFieldEnhancer');
@@ -74,17 +75,22 @@ export class CommentFieldEnhancer {
     // Position the button near the comment field
     this.positionButton(button, field);
     
-    // Attach event listeners
-    this.attachEventListeners(button, field);
-    
-    // Make button visible by default
-    button.style.display = 'block';
+    // Make button hidden by default
+    button.style.display = 'none';
     
     // Add focus and blur event listeners to manage button
     this.attachFieldFocusEvents(button, field);
     
+    // Attach event listeners for click and other interactions
+    this.attachEventListeners(button, field);
+    
     // Listen for comment generation completion
     this.setupMessageListener(button);
+    
+    // Show the button if the field already has focus
+    if (document.activeElement === field || field.contains(document.activeElement)) {
+      button.style.display = 'block';
+    }
     
     this.logger.info('ENHANCEMENT: Field enhanced with ID:', field.id);
     return field.id;
@@ -99,6 +105,7 @@ export class CommentFieldEnhancer {
     button.className = 'engageiq-generate-button';
     button.setAttribute('aria-label', 'Generate Comment with AI');
     button.setAttribute('data-field-id', field.id);
+    button.setAttribute('tabindex', '0'); // Make it focusable
     
     // Create icon container with tooltip instead of text
     const buttonContent = document.createElement('div');
@@ -192,6 +199,7 @@ export class CommentFieldEnhancer {
       align-items: center;
       justify-content: center;
       font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      pointer-events: auto;
     `;
     
     // Hover effects
@@ -285,18 +293,51 @@ export class CommentFieldEnhancer {
    * Attach event listeners to the Generate Comment button
    */
   private attachEventListeners(button: HTMLElement, field: HTMLElement): void {
-    button.addEventListener('click', async () => {
+    // Add mousedown handler to set clicking state
+    button.addEventListener('mousedown', () => {
+      this.isButtonClicking = true;
+      button.classList.add('engageiq-button-clicking');
+      
+      // Set a timeout to reset this state if the click handler doesn't fire
+      setTimeout(() => {
+        this.isButtonClicking = false;
+        button.classList.remove('engageiq-button-clicking');
+      }, 1000);
+    });
+    
+    button.addEventListener('click', async (e) => {
+      // Prevent the default action
+      e.preventDefault();
+      
+      // Stop the event from propagating to prevent focus loss
+      e.stopPropagation();
+      
+      // Reset clicking state
+      this.isButtonClicking = false;
+      button.classList.remove('engageiq-button-clicking');
+      
+      if (this.isGenerating) {
+        this.logger.info('Currently generating, ignoring click');
+        return;
+      }
+      
+      this.isGenerating = true;
+      this.logger.info('ENHANCEMENT: Generate button clicked for field', field.id);
+      
+      // Force the button to stay visible
+      button.style.display = 'block';
+      
       // Show loading state
       this.showButtonLoadingState(button);
       
-      // First ensure we have a unique ID for the field
-      if (!field.id) {
-        field.id = `engageiq-comment-field-${Date.now()}`;
-      }
+      // Prevent button from being hidden during generation
+      button.setAttribute('data-generating', 'true');
       
-      // Get the user's saved comment length preference
+      // Extract post content
+      const postContent = this.extractPostContent(field);
+      
+      // Get user's length preference
       let lengthPreference: CommentLength = 'medium'; // Default
-      
       try {
         const response = await chrome.runtime.sendMessage({ 
           type: 'GET_COMMENT_LENGTH_PREFERENCE' 
@@ -304,24 +345,11 @@ export class CommentFieldEnhancer {
         
         if (response && response.preference) {
           lengthPreference = response.preference;
-          this.logger.info('Using saved length preference:', lengthPreference);
-        } else {
-          this.logger.info('No saved preference found, using default:', lengthPreference);
+          this.logger.info('Using length preference:', lengthPreference);
         }
       } catch (error) {
-        this.logger.error('Error getting length preference:', error);
-        // Check if this is a context invalidation error
-        if (error instanceof Error && error.message.includes('Extension context invalidated')) {
-          this.showContextInvalidationError(button);
-          return;
-        }
-        // Reset loading state on error
-        this.resetButtonLoadingState(button);
-        return;
+        this.logger.error('Error loading length preference:', error);
       }
-      
-      // Extract post content
-      const postContent = this.extractPostContent(field);
       
       // Send message to background script to generate comment
       try {
@@ -515,7 +543,7 @@ export class CommentFieldEnhancer {
       button.style.left = originalLeft;
       
       // Apply super aggressive styles to ensure visibility
-      button.style.display = 'flex !important';
+      button.style.display = 'flex';
       button.style.alignItems = 'center';
       button.style.justifyContent = 'center'; 
       button.style.backgroundColor = '#0a66c2';
@@ -527,9 +555,9 @@ export class CommentFieldEnhancer {
       button.style.position = 'fixed'; // Use fixed instead of absolute
       button.style.zIndex = '99999'; // Ultra high z-index
       button.style.boxShadow = '0 0 8px rgba(0,0,0,0.5)'; // More visible shadow
-      button.style.opacity = '1 !important';
-      button.style.visibility = 'visible !important';
-      button.style.pointerEvents = 'none'; // Prevent accidental clicks during loading
+      button.style.opacity = '1';
+      button.style.visibility = 'visible';
+      button.style.pointerEvents = 'auto'; // Allow interactions with the button
       button.style.transform = 'none'; // Reset any transforms
       
       // Force browser repaints
@@ -537,8 +565,13 @@ export class CommentFieldEnhancer {
       button.offsetHeight;
       document.body.offsetHeight;
       
-      // Set an interval to ensure the button stays visible (LinkedIn might be hiding it)
-      const visibilityInterval = setInterval(() => {
+      // Instead of using an interval, just make a one-time check in a few hundred ms
+      let checkCount = 0;
+      const MAX_CHECKS = 5;
+      const checkButtonVisibility = () => {
+        if (checkCount >= MAX_CHECKS) return;
+        checkCount++;
+        
         if (!document.body.contains(button)) {
           document.body.appendChild(button);
           button.style.visibility = 'visible';
@@ -548,26 +581,34 @@ export class CommentFieldEnhancer {
           this.logger.info('BUTTON DEBUG - Restored hidden button to DOM');
         }
         
-        // Check if button is invisible and force visibility
+        // Check if button is invisible and force visibility only if needed
         const currentDisplay = window.getComputedStyle(button).display;
         const currentVisibility = window.getComputedStyle(button).visibility;
         const currentOpacity = window.getComputedStyle(button).opacity;
         
-        if (currentDisplay === 'none' || currentVisibility === 'hidden' || currentOpacity === '0') {
-          button.style.display = 'flex !important';
-          button.style.visibility = 'visible !important';
-          button.style.opacity = '1 !important';
+        const isHidden = currentDisplay === 'none' || currentVisibility === 'hidden' || 
+                        parseFloat(currentOpacity) < 0.5;
+        
+        if (isHidden) {
+          button.style.display = 'flex';
+          button.style.visibility = 'visible';
+          button.style.opacity = '1';
           
-          this.logger.info('BUTTON DEBUG - Forced visibility on hidden button', {
+          this.logger.info('BUTTON DEBUG - Fixed hidden button', {
             display: currentDisplay,
             visibility: currentVisibility,
             opacity: currentOpacity
           });
+          
+          // Schedule another check in case it gets hidden again
+          const timeoutId = setTimeout(checkButtonVisibility, 500);
+          button.setAttribute('data-visibility-timeout', timeoutId.toString());
         }
-      }, 100);
+      };
       
-      // Store the interval ID in a data attribute so we can clear it later
-      button.setAttribute('data-visibility-interval', String(visibilityInterval));
+      // Initial check after a brief delay
+      const initialTimeoutId = setTimeout(checkButtonVisibility, 100);
+      button.setAttribute('data-visibility-timeout', initialTimeoutId.toString());
       
       // Now check the button's state AFTER our changes
       const afterRect = button.getBoundingClientRect();
@@ -614,250 +655,63 @@ export class CommentFieldEnhancer {
    * Reset loading state on the button
    */
   private resetButtonLoadingState(button: HTMLElement): void {
-    this.isGenerating = false;
-    
-    // Clear the visibility interval if it exists
-    const intervalId = button.getAttribute('data-visibility-interval');
-    if (intervalId) {
-      clearInterval(parseInt(intervalId, 10));
-      button.removeAttribute('data-visibility-interval');
-      this.logger.info('BUTTON DEBUG - Cleared visibility interval');
+    // Clear any running timeouts
+    const timeoutId = button.getAttribute('data-visibility-timeout');
+    if (timeoutId) {
+      clearTimeout(parseInt(timeoutId, 10));
     }
     
-    // Recreate button at the document level to ensure it's visible
+    // Check if the button exists in the DOM
+    if (!document.body.contains(button)) {
+      this.logger.info('Button not in DOM during reset, skipping');
+      this.isGenerating = false;
+      return;
+    }
+    
+    // If the button was cloned, it may not have proper structure
+    // Let's create a completely fresh button to replace it
     const fieldId = button.getAttribute('data-field-id');
-    const buttonId = button.id;
-    const originalTop = button.style.top;
-    const originalLeft = button.style.left;
+    if (!fieldId) {
+      this.logger.info('Button has no field ID during reset, skipping');
+      this.isGenerating = false;
+      return;
+    }
+    
+    // Find the associated field
+    const field = document.getElementById(fieldId);
+    if (!field) {
+      this.logger.info('Field not found during button reset, removing button');
+      document.body.removeChild(button);
+      this.isGenerating = false;
+      return;
+    }
+    
+    // Create a fresh button
+    const newButton = this.createGenerateButton(field);
+    
+    // Position it in the same place
+    this.positionButton(newButton, field);
+    
+    // Attach event listeners
+    this.attachEventListeners(newButton, field);
+    
+    // Set up focus events
+    this.attachFieldFocusEvents(newButton, field);
+    
+    // Listen for messages
+    this.setupMessageListener(newButton);
     
     // Remove the old button
     try {
-      if (button.parentElement) {
-        button.parentElement.removeChild(button);
-      }
+      document.body.removeChild(button);
     } catch (e) {
-      // Ignore errors
+      // Ignore if already removed
     }
     
-    // Create a brand new button
-    const newButton = document.createElement('button');
-    newButton.id = buttonId;
-    newButton.setAttribute('data-field-id', fieldId || '');
-    newButton.className = 'engageiq-generate-button';
-    newButton.setAttribute('aria-label', 'Generate Comment with AI');
+    // Reset the generating state
+    this.isGenerating = false;
     
-    // Position the new button at the same location
-    newButton.style.top = originalTop;
-    newButton.style.left = originalLeft;
-    
-    // Set all required styles directly
-    newButton.style.backgroundColor = '#0a66c2';
-    newButton.style.color = 'white';
-    newButton.style.display = 'block'; 
-    newButton.style.opacity = '1';
-    newButton.style.cursor = 'pointer';
-    newButton.style.width = '36px';
-    newButton.style.height = '36px';
-    newButton.style.borderRadius = '50%';
-    newButton.style.position = 'absolute';
-    newButton.style.zIndex = '9999';
-    newButton.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
-    newButton.style.border = 'none';
-    
-    // Create button content container
-    const buttonContent = document.createElement('div');
-    buttonContent.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      width: 100%;
-      height: 100%;
-    `;
-    
-    // Create the button tooltip - initially hidden
-    const tooltip = document.createElement('span');
-    tooltip.textContent = 'Generate Comment';
-    tooltip.style.cssText = `
-      position: absolute;
-      background-color: rgba(0, 0, 0, 0.75);
-      color: white;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      white-space: nowrap;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.2s, visibility 0.2s;
-      pointer-events: none;
-      top: -30px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10000;
-    `;
-    
-    // Create a simple circular button with "AI" text 
-    const circleIcon = document.createElement('div');
-    circleIcon.style.cssText = `
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background-color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 10px;
-      color: #0a66c2;
-      font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-    `;
-    
-    // Use a span for the text to better isolate it
-    const aiText = document.createElement('span');
-    aiText.textContent = 'AI';
-    aiText.style.cssText = `
-      display: block;
-      line-height: 1;
-    `;
-    
-    circleIcon.appendChild(aiText);
-    
-    // Add hover effect for tooltip
-    newButton.addEventListener('mouseenter', () => {
-      tooltip.style.opacity = '1';
-      tooltip.style.visibility = 'visible';
-    });
-    
-    newButton.addEventListener('mouseleave', () => {
-      tooltip.style.opacity = '0';
-      tooltip.style.visibility = 'hidden';
-    });
-    
-    buttonContent.appendChild(circleIcon);
-    buttonContent.appendChild(tooltip);
-    newButton.appendChild(buttonContent);
-    
-    // Add hover effects again
-    newButton.addEventListener('mouseover', () => {
-      newButton.style.backgroundColor = '#004182';
-      newButton.style.transform = 'scale(1.05)';
-    });
-    
-    newButton.addEventListener('mouseout', () => {
-      newButton.style.backgroundColor = '#0a66c2';
-      newButton.style.transform = 'scale(1)';
-    });
-    
-    // Add active press effect
-    newButton.addEventListener('mousedown', () => {
-      newButton.style.transform = 'scale(0.95)';
-    });
-    
-    newButton.addEventListener('mouseup', () => {
-      newButton.style.transform = 'scale(1.05)';
-    });
-    
-    // Re-add click handler
-    newButton.addEventListener('click', async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Prevent multiple clicks
-      if (this.isGenerating) {
-        this.logger.info('Generate button clicked but generation already in progress');
-        return;
-      }
-      
-      const field = document.getElementById(fieldId || '') as HTMLElement;
-      if (!field) {
-        this.logger.error('Could not find field for button click', { fieldId });
-        return;
-      }
-      
-      this.logger.info('Generate button clicked for field:', field.id);
-      
-      // Log button state before applying loading state
-      this.logger.info('Button pre-loading state', {
-        id: newButton.id,
-        display: newButton.style.display,
-        innerHTML: newButton.innerHTML.substring(0, 50) + '...',
-        isNewButton: true
-      });
-      
-      // Show loading state
-      this.showButtonLoadingState(newButton);
-      
-      // Get saved length preference
-      let lengthPreference = 'medium'; // Default to medium if preference can't be retrieved
-      try {
-        const response = await chrome.runtime.sendMessage({ 
-          type: 'GET_COMMENT_LENGTH_PREFERENCE' 
-        });
-        
-        if (response && response.preference) {
-          lengthPreference = response.preference;
-          this.logger.info('Using saved length preference:', lengthPreference);
-        } else {
-          this.logger.info('No saved preference found, using default:', lengthPreference);
-        }
-      } catch (error) {
-        this.logger.error('Error getting length preference:', error);
-        // Reset loading state on error
-        this.resetButtonLoadingState(newButton);
-        return;
-      }
-      
-      // Extract post content
-      const postContent = this.extractPostContent(field);
-      
-      // Send message to background script to generate comment
-      chrome.runtime.sendMessage({
-        type: 'GENERATE_COMMENT',
-        payload: {
-          fieldId: field.id,
-          postContent,
-          options: {
-            tone: 'all',
-            length: lengthPreference
-          }
-        }
-      }, (response) => {
-        this.logger.info('Generate comment response:', response);
-        
-        if (response && response.error) {
-          // Reset loading state on error
-          this.resetButtonLoadingState(newButton);
-        }
-        
-        // For debugging - we should now receive a COMMENT_GENERATED message from background script
-        this.logger.info('Waiting for COMMENT_GENERATED message...');
-      });
-    });
-    
-    // Add to DOM at document level
-    document.body.appendChild(newButton);
-    
-    // Setup message listener
-    this.setupMessageListener(newButton);
-    
-    // Reattach field events
-    const field = document.getElementById(fieldId || '') as HTMLElement;
-    if (field) {
-      this.attachFieldFocusEvents(newButton, field);
-    }
-    
-    // Force a layout reflow
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-    newButton.offsetHeight;
-    
-    // Log button restoration
-    this.logger.info('Button loading state reset - created new button', {
-      buttonContent: newButton.innerHTML.substring(0, 50) + '...',
-      buttonDisplay: newButton.style.display,
-      buttonOpacity: newButton.style.opacity,
-      newButtonId: newButton.id,
-      fieldId: newButton.getAttribute('data-field-id')
-    });
+    this.logger.info('Successfully reset button with a fresh instance');
   }
   
   /**
@@ -883,20 +737,69 @@ export class CommentFieldEnhancer {
    * Attach focus and blur events to manage button visibility
    */
   private attachFieldFocusEvents(button: HTMLElement, field: HTMLElement): void {
-    const handleShowButton = () => {
+    const handleShowButton = (e: Event) => {
+      // Stop propagation to ensure consistent behavior
+      e.stopPropagation();
+      
+      // Immediately make button visible
       button.style.display = 'block';
+      
+      // Log for debugging
+      this.logger.info('Field focused, showing button');
+      
       // Ensure tooltip is hidden when button reappears
       this.resetTooltipState(button);
     };
     
-    // Keep button always visible since it's now positioned outside the comment field
-    // We're not hiding it on focusout anymore
+    const handleHideButton = (e: FocusEvent) => {
+      // Stop event propagation
+      e.stopPropagation();
+      
+      // Use a small delay to allow the click event to fire
+      setTimeout(() => {
+        // Don't hide the button if it's currently generating a comment
+        if (button.getAttribute('data-generating') === 'true') {
+          return;
+        }
+        
+        // Don't hide if we're currently clicking the button
+        if (this.isButtonClicking || button.classList.contains('engageiq-button-clicking')) {
+          return;
+        }
+        
+        // Don't hide if the relatedTarget (element receiving focus) is the button itself
+        if (e.relatedTarget === button || (e.relatedTarget && button.contains(e.relatedTarget as Node))) {
+          return;
+        }
+        
+        // Log for debugging
+        this.logger.info('Field lost focus, hiding button');
+        
+        // Hide the button when field loses focus
+        button.style.display = 'none';
+      }, 150); // Slightly longer delay to ensure click has time to register
+    };
     
     // Show button when the field or any element inside it is focused
     field.addEventListener('focusin', handleShowButton);
     
-    // Make sure button is visible when the page loads
-    handleShowButton();
+    // Hide button when focus leaves the field
+    field.addEventListener('focusout', handleHideButton);
+    
+    // Force button visibility on mousedown
+    button.addEventListener('mousedown', (e) => {
+      // Prevent defaults and stop propagation
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Log for debugging
+      this.logger.info('Button mousedown, ensuring visibility');
+      
+      // Force button visible state
+      this.isButtonClicking = true;
+      button.classList.add('engageiq-button-clicking');
+      button.style.display = 'block';
+    });
   }
   
   /**
