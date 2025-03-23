@@ -94,7 +94,7 @@ export class CommentDisplay implements ICommentDisplay {
     commentsUI.appendChild(header);
     
     // Add length preference selector
-    const lengthPreferenceSection = this.createLengthPreferenceSelector(isDarkMode);
+    const lengthPreferenceSection = this.createLengthPreferenceSelector(isDarkMode, fieldId, commentsUI);
     commentsUI.appendChild(lengthPreferenceSection);
     
     // Create content
@@ -118,9 +118,11 @@ export class CommentDisplay implements ICommentDisplay {
   /**
    * Create length preference selector UI
    * @param isDarkMode Whether dark mode is active
+   * @param fieldId The ID of the comment field
+   * @param commentsUI The comments UI container element
    * @returns HTMLElement containing the length preference UI
    */
-  private createLengthPreferenceSelector(isDarkMode: boolean): HTMLElement {
+  private createLengthPreferenceSelector(isDarkMode: boolean, fieldId: string, commentsUI: HTMLElement): HTMLElement {
     const container = document.createElement('div');
     container.style.cssText = `
       margin-bottom: 16px;
@@ -156,44 +158,26 @@ export class CommentDisplay implements ICommentDisplay {
       option.textContent = displayName;
       
       const isSelected = length === this.selectedLength;
-      option.style.cssText = `
-        background-color: ${isSelected 
-          ? (isDarkMode ? '#0073b1' : '#0a66c2') 
-          : (isDarkMode ? '#283339' : '#f5f5f5')};
-        color: ${isSelected 
-          ? 'white' 
-          : (isDarkMode ? '#a5a5a5' : '#666')};
-        border: 1px solid ${isSelected 
-          ? (isDarkMode ? '#0073b1' : '#0a66c2') 
-          : (isDarkMode ? '#424242' : '#e0e0e0')};
-        border-radius: 16px;
-        padding: 5px 0;
-        font-size: 12px;
-        font-weight: 500;
-        cursor: pointer;
-        flex: 1;
-        text-align: center;
-        transition: all 0.2s ease;
-      `;
+      
+      // Apply proper styling for the selected option
+      this.applyButtonStyle(option, isSelected, isDarkMode);
       
       option.addEventListener('click', () => {
+        const previousLength = this.selectedLength;
         this.selectedLength = length;
-        // Here we would trigger regeneration with the new length
-        // This will be implemented in the next sub-step 14.2
         
-        // Update visual selection
-        const buttons = optionsContainer.querySelectorAll('button');
-        buttons.forEach(btn => {
-          if (btn === option) {
-            btn.style.backgroundColor = isDarkMode ? '#0073b1' : '#0a66c2';
-            btn.style.color = 'white';
-            btn.style.borderColor = isDarkMode ? '#0073b1' : '#0a66c2';
-          } else {
-            btn.style.backgroundColor = isDarkMode ? '#283339' : '#f5f5f5';
-            btn.style.color = isDarkMode ? '#a5a5a5' : '#666';
-            btn.style.borderColor = isDarkMode ? '#424242' : '#e0e0e0';
-          }
-        });
+        // Only regenerate if the selection actually changed
+        if (previousLength !== length) {
+          // Update visual selection first for immediate feedback
+          const buttons = optionsContainer.querySelectorAll('button');
+          buttons.forEach(btn => {
+            const isCurrentButton = btn === option;
+            this.applyButtonStyle(btn, isCurrentButton, isDarkMode);
+          });
+          
+          // Generate new comments with the selected length
+          this.regenerateComments(fieldId, commentsUI);
+        }
       });
       
       optionsContainer.appendChild(option);
@@ -201,6 +185,33 @@ export class CommentDisplay implements ICommentDisplay {
     
     container.appendChild(optionsContainer);
     return container;
+  }
+  
+  /**
+   * Apply styling to a button based on selection state
+   * @param button The button element to style
+   * @param isSelected Whether the button is selected
+   * @param isDarkMode Whether dark mode is active
+   */
+  private applyButtonStyle(button: HTMLButtonElement, isSelected: boolean, isDarkMode: boolean): void {
+    button.style.backgroundColor = isSelected 
+      ? (isDarkMode ? '#0073b1' : '#0a66c2') 
+      : (isDarkMode ? '#283339' : '#f5f5f5');
+    button.style.color = isSelected 
+      ? 'white' 
+      : (isDarkMode ? '#a5a5a5' : '#666');
+    button.style.borderColor = isSelected 
+      ? (isDarkMode ? '#0073b1' : '#0a66c2') 
+      : (isDarkMode ? '#424242' : '#e0e0e0');
+    button.style.border = `1px solid ${button.style.borderColor}`;
+    button.style.borderRadius = '16px';
+    button.style.padding = '5px 0';
+    button.style.fontSize = '12px';
+    button.style.fontWeight = '500';
+    button.style.cursor = 'pointer';
+    button.style.flex = '1';
+    button.style.textAlign = 'center';
+    button.style.transition = 'all 0.2s ease';
   }
   
   /**
@@ -353,5 +364,124 @@ export class CommentDisplay implements ICommentDisplay {
         commentsUI.remove();
       }
     });
+  }
+
+  /**
+   * Regenerate comments with a new length preference
+   * @param fieldId ID of the comment field
+   * @param commentsUI The current comments UI container
+   */
+  private regenerateComments(fieldId: string, commentsUI: HTMLElement): void {
+    this.logger.info('Regenerating comments with new length preference', { 
+      length: this.selectedLength,
+      fieldId 
+    });
+    
+    // Show loading state
+    this.showLoadingState(commentsUI);
+    
+    // Extract post content from the field (or its closest parent post)
+    const field = document.getElementById(fieldId);
+    if (!field) {
+      this.logger.warn('Field not found for regeneration', { fieldId });
+      return;
+    }
+    
+    // Find closest post containing this comment field (simplified extraction)
+    const post = field.closest('.feed-shared-update-v2') || 
+                field.closest('article') || 
+                field.closest('.ember-view.occludable-update');
+    
+    if (!post) {
+      this.logger.info('Could not find post for comment field');
+      return;
+    }
+    
+    // Extract basic post content (simplified)
+    const textElement = post.querySelector('.feed-shared-update-v2__description-wrapper') || 
+                      post.querySelector('.update-components-text');
+    
+    const postText = textElement ? textElement.textContent?.trim() : 'No text content found';
+    
+    // Extract author info
+    const authorElement = post.querySelector('.feed-shared-actor__name') || 
+                         post.querySelector('.update-components-actor__name');
+    
+    const author = authorElement ? authorElement.textContent?.trim() : 'Unknown author';
+    
+    const postContent = {
+      author,
+      text: postText,
+      url: window.location.href
+    };
+    
+    // Send message to background script to generate comment with new length
+    chrome.runtime.sendMessage({
+      type: 'GENERATE_COMMENT',
+      payload: {
+        fieldId: fieldId,
+        postContent,
+        options: {
+          tone: 'all',
+          length: this.selectedLength
+        }
+      }
+    }, (response) => {
+      this.logger.info('Regenerated comment response:', response);
+      
+      // Remove the current UI since we'll show a new one when we get the COMMENT_GENERATED message
+      commentsUI.remove();
+    });
+  }
+  
+  /**
+   * Show loading state in the comments UI
+   * @param commentsUI The comments UI container
+   */
+  private showLoadingState(commentsUI: HTMLElement): void {
+    // Find the content area or create one if it doesn't exist
+    let content = commentsUI.querySelector('div:not(:first-child)');
+    if (!content) {
+      content = document.createElement('div');
+      commentsUI.appendChild(content);
+    }
+    
+    // Clear existing content
+    content.innerHTML = '';
+    
+    // Add loading indicator
+    const loadingElement = document.createElement('div');
+    loadingElement.textContent = 'Generating new suggestions...';
+    loadingElement.style.cssText = `
+      text-align: center;
+      padding: 20px;
+      color: #666;
+      font-size: 14px;
+    `;
+    
+    // Add spinner
+    const spinner = document.createElement('div');
+    spinner.style.cssText = `
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #0a66c2;
+      border-radius: 50%;
+      width: 24px;
+      height: 24px;
+      animation: spin 2s linear infinite;
+      margin: 10px auto;
+    `;
+    
+    // Add animation
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+    `;
+    document.head.appendChild(style);
+    
+    loadingElement.prepend(spinner);
+    content.appendChild(loadingElement);
   }
 }

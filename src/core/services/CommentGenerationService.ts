@@ -86,10 +86,13 @@ export class CommentGenerationService {
                            options.length === 'medium' ? 0.7 :
                            options.length === 'long' ? 0.75 : 0.8;
                            
-        const maxTokens = options.length === 'very_short' ? 200 : 
-                         options.length === 'short' ? 400 :
-                         options.length === 'medium' ? 600 :
-                         options.length === 'long' ? 800 : 1000;
+        // Adjust max tokens based on desired comment length
+        // This helps prevent unnecessarily long responses for shorter preferences
+        // while allowing enough space for longer responses
+        const maxTokens = options.length === 'very_short' ? 150 : 
+                         options.length === 'short' ? 300 :
+                         options.length === 'medium' ? 500 :
+                         options.length === 'long' ? 800 : 1100;
         
         const response = await fetch(`${this.API_URL}?key=${apiKey}`, {
           method: 'POST',
@@ -278,6 +281,15 @@ export class CommentGenerationService {
       'very_long': '6-8 sentences'
     }[options.length];
     
+    // Additional length-specific instructions based on preference
+    const lengthSpecificInstructions = {
+      'very_short': 'Be concise and direct. Focus only on the most essential point.',
+      'short': 'Keep the comment brief while still providing value. Focus on one key insight.',
+      'medium': 'Balance brevity with substance. Include enough context to be valuable.',
+      'long': 'Provide more detailed insights and context. Develop your thoughts more fully.',
+      'very_long': 'Offer comprehensive insights with examples or elaboration. Develop multiple points that build on each other.'
+    }[options.length] || 'Balance brevity with substance.';
+    
     // Time context if available
     const timeContext = postContent.timestamp
       ? `The post was published ${postContent.timestamp}.`
@@ -333,12 +345,13 @@ export class CommentGenerationService {
       Instructions:
       1. Generate a ${options.tone} comment that is ${lengthGuidance} in length
       2. ${toneGuidanceDetail}
-      3. Make the comment relevant to the specific content of the post
-      4. Use professional language appropriate for LinkedIn
-      5. If the post is in a language other than English, respond in that same language
-      6. Make the comment authentic and conversational, not generic or formulaic
-      7. Do not explicitly mention that you're commenting on their post (e.g., avoid phrases like "Thanks for sharing this post")
-      8. Your comment should provide value to the conversation
+      3. ${lengthSpecificInstructions}
+      4. Make the comment relevant to the specific content of the post
+      5. Use professional language appropriate for LinkedIn
+      6. If the post is in a language other than English, respond in that same language
+      7. Make the comment authentic and conversational, not generic or formulaic
+      8. Do not explicitly mention that you're commenting on their post (e.g., avoid phrases like "Thanks for sharing this post")
+      9. Your comment should provide value to the conversation
       
       Return only the comment text without any additional formatting, explanations, or quotation marks.
     `.trim();
