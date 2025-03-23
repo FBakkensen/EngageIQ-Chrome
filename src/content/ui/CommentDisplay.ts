@@ -331,8 +331,8 @@ export class CommentDisplay implements ICommentDisplay {
     dragIndicator.style.cssText = `
       display: flex;
       align-items: center;
-      gap: 3px;
-      padding: 6px 8px;
+      gap: 4px;
+      padding: 8px 10px;
       background-color: ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.07)'};
       border-radius: 4px;
       margin-right: 8px;
@@ -341,97 +341,6 @@ export class CommentDisplay implements ICommentDisplay {
       border: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'};
       transition: background-color 0.2s;
     `;
-    
-    // Add tooltip for drag handle with improved styling
-    const dragTooltip = document.createElement('span');
-    dragTooltip.textContent = 'Drag here to move • Double-click to center';
-    dragTooltip.style.cssText = `
-      position: absolute;
-      background-color: rgba(0, 0, 0, 0.8);
-      color: white;
-      padding: 6px 10px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
-      white-space: nowrap;
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 0.2s, visibility 0.2s;
-      pointer-events: none;
-      top: -36px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 10000;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-    `;
-    
-    // Add a small arrow at the bottom of the tooltip
-    const tooltipArrow = document.createElement('div');
-    tooltipArrow.style.cssText = `
-      position: absolute;
-      bottom: -4px;
-      left: 50%;
-      transform: translateX(-50%) rotate(45deg);
-      width: 8px;
-      height: 8px;
-      background-color: rgba(0, 0, 0, 0.8);
-      border-right: 1px solid rgba(255, 255, 255, 0.1);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    `;
-    dragTooltip.appendChild(tooltipArrow);
-    
-    // Show tooltip initially and hide after 3 seconds
-    setTimeout(() => {
-      dragTooltip.style.opacity = '1';
-      dragTooltip.style.visibility = 'visible';
-      
-      // Add a subtle pulse animation to draw attention
-      const pulseStyle = document.createElement('style');
-      pulseStyle.textContent = `
-        @keyframes pulse {
-          0% { transform: translateX(-50%) scale(1); }
-          50% { transform: translateX(-50%) scale(1.05); }
-          100% { transform: translateX(-50%) scale(1); }
-        }
-      `;
-      document.head.appendChild(pulseStyle);
-      dragTooltip.style.animation = 'pulse 1s ease-in-out 3';
-      
-      // Hide tooltip after 3 seconds
-      setTimeout(() => {
-        dragTooltip.style.opacity = '0';
-        dragTooltip.style.visibility = 'hidden';
-        dragTooltip.style.animation = '';
-      }, 3000);
-    }, 800); // Show after initial popup animation finishes
-    
-    // Standard hover behavior for tooltip after initial display
-    dragIndicator.addEventListener('mouseenter', () => {
-      // Only show if it's not already visible
-      if (dragTooltip.style.visibility !== 'visible') {
-        dragTooltip.style.opacity = '1';
-        dragTooltip.style.visibility = 'visible';
-        dragTooltip.style.animation = ''; // Remove any animation
-      }
-      
-      // Change background color on hover
-      dragIndicator.style.backgroundColor = isDarkMode ? 
-        'rgba(255, 255, 255, 0.12)' : 
-        'rgba(0, 0, 0, 0.1)';
-    });
-    
-    dragIndicator.addEventListener('mouseleave', () => {
-      dragTooltip.style.opacity = '0';
-      dragTooltip.style.visibility = 'hidden';
-      
-      // Reset background color
-      dragIndicator.style.backgroundColor = isDarkMode ? 
-        'rgba(255, 255, 255, 0.08)' : 
-        'rgba(0, 0, 0, 0.07)';
-    });
-    
-    dragIndicator.appendChild(dragTooltip);
     
     for (let i = 0; i < 3; i++) {
       const dot = document.createElement('div');
@@ -443,6 +352,20 @@ export class CommentDisplay implements ICommentDisplay {
       `;
       dragIndicator.appendChild(dot);
     }
+    
+    // Change background color on hover
+    dragIndicator.addEventListener('mouseenter', () => {
+      dragIndicator.style.backgroundColor = isDarkMode ? 
+        'rgba(255, 255, 255, 0.12)' : 
+        'rgba(0, 0, 0, 0.1)';
+    });
+    
+    dragIndicator.addEventListener('mouseleave', () => {
+      // Reset background color
+      dragIndicator.style.backgroundColor = isDarkMode ? 
+        'rgba(255, 255, 255, 0.08)' : 
+        'rgba(0, 0, 0, 0.07)';
+    });
     
     const title = document.createElement('h3');
     // Use textContent to ensure proper text rendering
@@ -1462,50 +1385,96 @@ export class CommentDisplay implements ICommentDisplay {
    * @param commentsUI The comments UI container
    */
   private showLoadingState(commentsUI: HTMLElement): void {
-    // Find the content area or create one if it doesn't exist
-    let content = commentsUI.querySelector('div:not(:first-child)');
-    if (!content) {
-      content = document.createElement('div');
-      commentsUI.appendChild(content);
+    // Find the tab content areas - we'll add loading overlays to each
+    const tabContents = commentsUI.querySelectorAll('.engageiq-tab-content > div');
+    if (!tabContents.length) {
+      this.logger.warn('No tab content found for loading state');
+      return;
     }
     
-    // Clear existing content
-    content.innerHTML = '';
-    
-    // Add loading indicator
-    const loadingElement = document.createElement('div');
-    loadingElement.textContent = 'Generating new suggestions...';
-    loadingElement.style.cssText = `
-      text-align: center;
-      padding: 20px;
-      color: #666;
-      font-size: 14px;
-    `;
-    
-    // Add spinner
-    const spinner = document.createElement('div');
-    spinner.style.cssText = `
-      border: 3px solid #f3f3f3;
-      border-top: 3px solid #0a66c2;
-      border-radius: 50%;
-      width: 24px;
-      height: 24px;
-      animation: spin 2s linear infinite;
-      margin: 10px auto;
-    `;
-    
-    // Add animation
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+    // Add a loading overlay to each tab pane
+    tabContents.forEach(tabPane => {
+      const textarea = tabPane.querySelector('textarea');
+      if (!textarea) return;
+      
+      // Create a loading overlay container
+      const overlay = document.createElement('div');
+      overlay.className = 'engageiq-loading-overlay';
+      overlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(255, 255, 255, 0.7);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+        border-radius: 6px;
+      `;
+      
+      // Adjust background for dark mode
+      if (this.themeDetector.isDarkMode()) {
+        overlay.style.backgroundColor = 'rgba(40, 51, 57, 0.8)';
       }
-    `;
-    document.head.appendChild(style);
+      
+      // Create and add spinner
+      const spinner = document.createElement('div');
+      spinner.style.cssText = `
+        border: 3px solid ${this.themeDetector.isDarkMode() ? '#3d3d3d' : '#f3f3f3'};
+        border-top: 3px solid ${this.themeDetector.isDarkMode() ? '#0073b1' : '#0a66c2'};
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        animation: engageiq-spin 1.5s linear infinite;
+        margin-bottom: 8px;
+      `;
+      
+      // Add text label
+      const label = document.createElement('div');
+      label.textContent = 'Regenerating...';
+      label.style.cssText = `
+        font-size: 12px;
+        color: ${this.themeDetector.isDarkMode() ? '#e0e0e0' : '#666'};
+        font-weight: 500;
+      `;
+      
+      // Create animation if it doesn't exist
+      if (!document.getElementById('engageiq-spinner-animation')) {
+        const style = document.createElement('style');
+        style.id = 'engageiq-spinner-animation';
+        style.textContent = `
+          @keyframes engageiq-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `;
+        document.head.appendChild(style);
+      }
+      
+      // Set up the overlay with relative positioning
+      const textareaContainer = textarea.parentElement;
+      if (textareaContainer) {
+        textareaContainer.style.position = 'relative';
+        overlay.appendChild(spinner);
+        overlay.appendChild(label);
+        textareaContainer.appendChild(overlay);
+        
+        // Fade the text in the textarea
+        textarea.style.opacity = '0.3';
+        textarea.style.transition = 'opacity 0.3s ease';
+      }
+    });
     
-    loadingElement.prepend(spinner);
-    content.appendChild(loadingElement);
+    // Add faded effect to the buttons
+    const buttonContainers = commentsUI.querySelectorAll('.engageiq-tab-content button');
+    buttonContainers.forEach(button => {
+      (button as HTMLElement).style.opacity = '0.5';
+      (button as HTMLElement).style.pointerEvents = 'none';
+      (button as HTMLElement).style.transition = 'opacity 0.3s ease';
+    });
   }
 
   /**
