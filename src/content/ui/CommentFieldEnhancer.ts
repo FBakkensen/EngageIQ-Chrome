@@ -178,14 +178,14 @@ export class CommentFieldEnhancer {
       color: white;
       border: none;
       border-radius: 50%;
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       padding: 0;
       cursor: pointer;
-      transition: background-color 0.2s, transform 0.1s;
+      transition: all 0.2s ease;
       position: absolute;
       z-index: 9999;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -195,21 +195,25 @@ export class CommentFieldEnhancer {
     // Hover effects
     button.addEventListener('mouseover', () => {
       button.style.backgroundColor = '#004182';
-      button.style.transform = 'scale(1.05)';
+      button.style.transform = 'scale(1.1)';
+      button.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
     });
     
     button.addEventListener('mouseout', () => {
       button.style.backgroundColor = '#0a66c2';
       button.style.transform = 'scale(1)';
+      button.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
     });
     
     // Add active press effect
     button.addEventListener('mousedown', () => {
       button.style.transform = 'scale(0.95)';
+      button.style.boxShadow = '0 1px 4px rgba(0,0,0,0.3)';
     });
     
     button.addEventListener('mouseup', () => {
-      button.style.transform = 'scale(1.05)';
+      button.style.transform = 'scale(1.1)';
+      button.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
     });
     
     this.logger.info('ENHANCEMENT: Created button with ID:', button.id);
@@ -231,9 +235,9 @@ export class CommentFieldEnhancer {
       height: fieldRect.height
     });
     
-    // Position at top-right of the field with adjusted positioning
-    const topPosition = window.scrollY + fieldRect.top;
-    const leftPosition = window.scrollX + fieldRect.left + fieldRect.width - 150;
+    // Position at bottom-right of the field, outside the typing area
+    const topPosition = window.scrollY + fieldRect.bottom + 5; // 5px below the field
+    const leftPosition = window.scrollX + fieldRect.left + fieldRect.width - 40; // 40px from right edge
     
     button.style.top = `${topPosition}px`;
     button.style.left = `${leftPosition}px`;
@@ -561,12 +565,12 @@ export class CommentFieldEnhancer {
     newButton.style.display = 'block'; 
     newButton.style.opacity = '1';
     newButton.style.cursor = 'pointer';
-    newButton.style.width = '32px';
-    newButton.style.height = '32px';
+    newButton.style.width = '36px';
+    newButton.style.height = '36px';
     newButton.style.borderRadius = '50%';
     newButton.style.position = 'absolute';
     newButton.style.zIndex = '9999';
-    newButton.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+    newButton.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
     newButton.style.border = 'none';
     
     // Create button content container
@@ -794,21 +798,14 @@ export class CommentFieldEnhancer {
       this.resetTooltipState(button);
     };
     
-    const handleHideButton = () => {
-      if (!field.contains(document.activeElement)) {
-        // Hide the button when field loses focus
-        button.style.display = 'none';
-      }
-    };
+    // Keep button always visible since it's now positioned outside the comment field
+    // We're not hiding it on focusout anymore
     
     // Show button when the field or any element inside it is focused
     field.addEventListener('focusin', handleShowButton);
     
-    // Hide button when focus leaves the field and its children
-    field.addEventListener('focusout', () => {
-      // Wait for the new activeElement to be set
-      setTimeout(handleHideButton, 100);
-    });
+    // Make sure button is visible when the page loads
+    handleShowButton();
   }
   
   /**
