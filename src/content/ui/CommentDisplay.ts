@@ -279,11 +279,23 @@ export class CommentDisplay implements ICommentDisplay {
     // Determine if we're in dark mode
     const isDarkMode = this.themeDetector.isDarkMode();
     
-    // Create the comments UI container - enhanced floating design with more width
+    // Calculate position before creating element to avoid layout thrashing
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const popupWidth = 500; // Match width from CSS
+    const popupHeight = 420; // Approximate height for calculations
+    const initialLeft = Math.max(0, (viewportWidth - popupWidth) / 2);
+    const initialTop = Math.max(0, (viewportHeight - popupHeight) / 2);
+    
+    // Create the comments UI container with all styles applied at once
     const commentsUI = document.createElement('div');
     commentsUI.className = 'engageiq-comments-ui';
+    
+    // Combine all styles in a single cssText operation to avoid reflows
     commentsUI.style.cssText = `
       position: fixed;
+      top: ${initialTop}px;
+      left: ${initialLeft}px;
       width: 500px;
       max-width: 95vw;
       background-color: ${isDarkMode ? '#1d2226' : 'white'};
@@ -295,24 +307,13 @@ export class CommentDisplay implements ICommentDisplay {
       max-height: 80vh;
       overflow-y: auto;
       font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-      transition: all 0.2s ease-in-out;
+      transition: opacity 0.2s ease;
       border: 1px solid ${isDarkMode ? '#3d3d3d' : '#e3e3e3'};
+      will-change: opacity;
+      opacity: 0;
     `;
     
-    // Position the comments UI
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const popupWidth = 500; // Match width from CSS above
-    const popupHeight = 420; // Approximate height for calculations
-    
-    // ALWAYS center the popup in the viewport - this is the most reliable approach
-    const initialLeft = Math.max(0, (viewportWidth - popupWidth) / 2);
-    const initialTop = Math.max(0, (viewportHeight - popupHeight) / 2);
     this.logger.info('Positioning popup in center of screen', { initialLeft, initialTop });
-    
-    // Set initial position
-    commentsUI.style.top = `${initialTop}px`;
-    commentsUI.style.left = `${initialLeft}px`;
     
     // Create header with enhanced drag handle styling
     const header = document.createElement('div');
@@ -716,7 +717,7 @@ export class CommentDisplay implements ICommentDisplay {
     document.body.appendChild(commentsUI);
     
     // Apply visual enhancements - all animations are now handled here
-    this.applyPopupVisualEnhancements(commentsUI, isDarkMode);
+    this.applyPopupVisualEnhancements(commentsUI);
     
     // Set up a MutationObserver to detect when the popup is removed from the DOM
     // (in case it's removed by any method other than the close button)
@@ -753,27 +754,23 @@ export class CommentDisplay implements ICommentDisplay {
   /**
    * Apply visual enhancements to the popup
    */
-  private applyPopupVisualEnhancements(popup: HTMLElement, isDarkMode: boolean): void {
-    // Set initial state for animation
-    popup.style.opacity = '0';
-    popup.style.transform = 'translateY(8px)';
+  private applyPopupVisualEnhancements(popup: HTMLElement): void {
+    // Since we've simplified the animation approach, we only need to fade in the popup
     
-    // Add floating appearance
-    popup.style.boxShadow = isDarkMode ? 
-      '0 10px 30px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05)' : 
-      '0 10px 30px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05)';
-    
-    // Add subtle border glow for floating effect
-    popup.style.boxShadow += isDarkMode ?
-      ', 0 0 30px rgba(0, 115, 177, 0.05)' :
-      ', 0 0 30px rgba(10, 102, 194, 0.05)';
+    // Use requestAnimationFrame to ensure styles are applied in the next frame
+    requestAnimationFrame(() => {
+      // Force a reflow to ensure initial styles are applied before animation
+      // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+      popup.offsetHeight;
       
-    // Fade in the popup
-    setTimeout(() => {
-      // Make the popup visible with a smooth transition
+      // Apply the visible state
       popup.style.opacity = '1';
-      popup.style.transform = 'translateY(0)';
-    }, 10);
+      
+      // Clean up will-change after animation completes to free GPU resources
+      setTimeout(() => {
+        popup.style.willChange = 'auto';
+      }, 300);
+    });
   }
   
   /**
@@ -864,8 +861,10 @@ export class CommentDisplay implements ICommentDisplay {
     const centerLeft = Math.max(0, (viewportWidth - popupWidth) / 2);
     const centerTop = Math.max(0, (viewportHeight - popupHeight) / 2);
     
-    // Smoothly animate to center position
+    // Apply transition temporarily for smooth movement
     popupElement.style.transition = 'left 0.3s ease-out, top 0.3s ease-out';
+    
+    // Set new position
     popupElement.style.left = `${centerLeft}px`;
     popupElement.style.top = `${centerTop}px`;
     
@@ -886,6 +885,10 @@ export class CommentDisplay implements ICommentDisplay {
     let isDragging = false;
     let offsetX = 0;
     let offsetY = 0;
+    let lastX = 0;
+    let lastY = 0;
+    let animationFrameId: number | null = null;
+    let lastScrollY = window.scrollY;
     
     // Add double-click handler to center the popup
     dragHandle.addEventListener('dblclick', (e) => {
@@ -907,6 +910,9 @@ export class CommentDisplay implements ICommentDisplay {
       
       isDragging = true;
       
+      // Remember current scroll position
+      lastScrollY = window.scrollY;
+      
       // Change cursor during drag
       document.body.style.cursor = 'move';
       
@@ -918,37 +924,68 @@ export class CommentDisplay implements ICommentDisplay {
       offsetX = e.clientX - popupRect.left;
       offsetY = e.clientY - popupRect.top;
       
+      lastX = e.clientX;
+      lastY = e.clientY;
+      
       // Prevent text selection during drag
       e.preventDefault();
     };
     
-    const doDrag = (e: MouseEvent) => {
+    const updatePosition = () => {
       if (!isDragging) return;
-      
-      // Calculate new position
-      const newLeft = e.clientX - offsetX;
-      const newTop = e.clientY - offsetY;
       
       // Get viewport and popup dimensions
       const viewportWidth = window.innerWidth;
       const viewportHeight = window.innerHeight;
-      const popupRect = popupElement.getBoundingClientRect();
-      const popupWidth = popupRect.width;
-      const popupHeight = popupRect.height;
+      const popupWidth = popupElement.offsetWidth;
+      const popupHeight = popupElement.offsetHeight;
+      
+      // Calculate new position
+      const newLeft = lastX - offsetX;
+      
+      // Adjust for scroll changes to keep popup relative to viewport
+      const scrollYDelta = window.scrollY - lastScrollY;
+      const newTop = (lastY - offsetY) + scrollYDelta;
+      
+      // Update last scroll position
+      lastScrollY = window.scrollY;
       
       // Ensure popup stays within viewport boundaries
       const boundedLeft = Math.max(0, Math.min(newLeft, viewportWidth - popupWidth));
       const boundedTop = Math.max(0, Math.min(newTop, viewportHeight - popupHeight));
       
-      // Update position
+      // Update position directly - using transform causes issues with positioning
       popupElement.style.left = `${boundedLeft}px`;
       popupElement.style.top = `${boundedTop}px`;
+      
+      if (isDragging) {
+        animationFrameId = requestAnimationFrame(updatePosition);
+      }
+    };
+    
+    const doDrag = (e: MouseEvent) => {
+      if (!isDragging) return;
+      
+      // Only update coordinates, actual rendering happens in updatePosition
+      lastX = e.clientX;
+      lastY = e.clientY;
+      
+      // Start animation frame if not already running
+      if (animationFrameId === null) {
+        animationFrameId = requestAnimationFrame(updatePosition);
+      }
     };
     
     const endDrag = () => {
       if (!isDragging) return;
       
       isDragging = false;
+      
+      // Cancel any pending animation frame
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
       
       // Reset cursor
       document.body.style.cursor = '';
@@ -957,17 +994,32 @@ export class CommentDisplay implements ICommentDisplay {
       popupElement.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.2)';
     };
     
-    // Add mouse event listeners
+    // Handle scroll events during drag to keep popup in correct position
+    const handleScroll = () => {
+      if (isDragging && animationFrameId === null) {
+        animationFrameId = requestAnimationFrame(updatePosition);
+      }
+    };
+    
+    // Add event listeners
     dragHandle.addEventListener('mousedown', startDrag);
-    document.addEventListener('mousemove', doDrag);
+    document.addEventListener('mousemove', doDrag, { passive: true });
     document.addEventListener('mouseup', endDrag);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     
     // Set up proper cleanup when the popup is closed
     const cleanupDragListeners = () => {
       document.removeEventListener('mousemove', doDrag);
       document.removeEventListener('mouseup', endDrag);
       dragHandle.removeEventListener('mousedown', startDrag);
+      window.removeEventListener('scroll', handleScroll);
       window.removeEventListener('beforeunload', cleanupDragListeners);
+      
+      // Cancel any pending animation frame
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
     };
     
     // Add cleanup for when popup is closed via the close button
