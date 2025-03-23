@@ -71,6 +71,9 @@ declare namespace EngageIQ {
     | { type: 'BUTTON_CLICKED', payload: { postId: string } }
     | { type: 'GET_LINKEDIN_STATUS' }
     | { type: 'GET_LINKEDIN_POST_STATUS' }
+    | { type: 'GET_COMMENT_LENGTH_PREFERENCE' }
+    | { type: 'SET_COMMENT_LENGTH_PREFERENCE', payload: CommentOptions['length'] }
+    | { type: 'RESET_COMMENT_LENGTH_PREFERENCE' }
     | { type: 'ERROR', payload: { message: string, context: string } };
     
   /**

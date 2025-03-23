@@ -164,11 +164,26 @@ export class CommentFieldEnhancer {
    * Attach event listeners to the button
    */
   private attachEventListeners(button: HTMLElement, field: HTMLElement): void {
-    button.addEventListener('click', (e) => {
+    button.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
       
       this.logger.info('Generate button clicked for field:', field.id);
+      
+      // Get saved length preference
+      let lengthPreference = 'medium'; // Default
+      try {
+        const response = await chrome.runtime.sendMessage({ 
+          type: 'GET_COMMENT_LENGTH_PREFERENCE' 
+        });
+        
+        if (response && response.preference) {
+          lengthPreference = response.preference;
+          this.logger.info('Using saved length preference:', lengthPreference);
+        }
+      } catch (error) {
+        this.logger.error('Error getting length preference:', error);
+      }
       
       // Extract post content
       const postContent = this.extractPostContent(field);
@@ -181,7 +196,7 @@ export class CommentFieldEnhancer {
           postContent,
           options: {
             tone: 'all',
-            length: 'medium'
+            length: lengthPreference
           }
         }
       }, (response) => {

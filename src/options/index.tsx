@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import '../styles/global.css';
+import { CommentLength } from '../content/ui/CommentDisplay';
 
 // Components
 import Card from '../components/Card';
@@ -15,6 +16,7 @@ interface OptionsState {
   isValid: boolean | null;
   statusMessage: string | null;
   statusType: StatusType;
+  commentLength: CommentLength;
 }
 
 /**
@@ -27,15 +29,17 @@ const OptionsPage: React.FC = () => {
     showApiKey: false,
     isValid: null,
     statusMessage: null,
-    statusType: 'none'
+    statusType: 'none',
+    commentLength: 'medium'
   });
 
   // Use the message service hook
   const { sendMessage, isLoading, error, clearError } = useMessageService();
 
-  // Load API key on component mount
+  // Load API key and preferences on component mount
   useEffect(() => {
     fetchApiKey();
+    fetchLengthPreference();
   }, []);
 
   // Show error from message service if any
@@ -63,6 +67,84 @@ const OptionsPage: React.FC = () => {
         }));
       }
     );
+  };
+
+  /**
+   * Fetches the comment length preference from storage
+   */
+  const fetchLengthPreference = async () => {
+    try {
+      chrome.storage.sync.get('commentLengthPreference', (result) => {
+        const lastError = chrome.runtime.lastError;
+        if (lastError) {
+          return;
+        }
+        
+        const preference = result.commentLengthPreference;
+        
+        if (preference) {
+          setState(prev => ({
+            ...prev,
+            commentLength: preference as CommentLength
+          }));
+        } else {
+          setState(prev => ({
+            ...prev,
+            commentLength: 'medium'
+          }));
+        }
+      });
+    } catch (error) {
+      console.error('Exception fetching preference:', error);
+    }
+  };
+
+  /**
+   * Saves the comment length preference to storage
+   */
+  const saveLengthPreference = async (length: CommentLength) => {
+    // Update UI immediately for better user feedback
+    setState(prev => ({
+      ...prev,
+      commentLength: length,
+      statusMessage: 'Saving...',
+      statusType: 'info'
+    }));
+
+    // Save to Chrome storage
+    try {
+      chrome.storage.sync.set({ 'commentLengthPreference': length }, () => {
+        const lastError = chrome.runtime.lastError;
+        if (lastError) {
+          setState(prev => ({
+            ...prev,
+            statusMessage: `Error: ${lastError.message || 'Unknown error'}`,
+            statusType: 'error'
+          }));
+        } else {
+          setState(prev => ({
+            ...prev,
+            statusMessage: 'Length preference saved',
+            statusType: 'success'
+          }));
+          setTimeout(clearStatus, 3000);
+        }
+      });
+    } catch (err) {
+      console.error('Error saving preference:', err);
+      setState(prev => ({
+        ...prev,
+        statusMessage: 'Failed to save preference',
+        statusType: 'error'
+      }));
+    }
+  };
+
+  /**
+   * Format the length name for display
+   */
+  const formatLengthName = (length: string): string => {
+    return length.replace('_', ' ').replace(/\b\w/g, char => char.toUpperCase());
   };
 
   /**
@@ -218,7 +300,7 @@ const OptionsPage: React.FC = () => {
         <div className="flex space-x-3">
           <Button
             variant="secondary"
-            onClick={validateApiKey}
+            onClick={() => validateApiKey()}
             isLoading={isLoading}
             disabled={!state.apiKey}
           >
@@ -227,7 +309,7 @@ const OptionsPage: React.FC = () => {
           
           <Button
             variant="primary"
-            onClick={saveApiKey}
+            onClick={() => saveApiKey()}
             isLoading={isLoading}
             disabled={!state.apiKey}
           >
@@ -237,7 +319,7 @@ const OptionsPage: React.FC = () => {
           {state.apiKey && (
             <Button
               variant="outline"
-              onClick={clearApiKey}
+              onClick={() => clearApiKey()}
               disabled={isLoading}
             >
               Clear Key
@@ -252,21 +334,24 @@ const OptionsPage: React.FC = () => {
           <label className="block text-sm font-medium mb-2">
             Default Comment Length
           </label>
+          
           <div className="grid grid-cols-5 gap-2">
             {['very_short', 'short', 'medium', 'long', 'very_long'].map((length) => (
-              <div
+              <button 
                 key={length}
+                type="button"
+                onClick={() => saveLengthPreference(length as CommentLength)}
                 className={`
                   p-2 rounded-md text-center cursor-pointer text-sm border
-                  ${length === 'medium' ? 'bg-blue-100 border-blue-300' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}
+                  ${length === state.commentLength ? 'bg-blue-100 border-blue-300 font-medium' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}
                 `}
               >
-                {length.replace('_', ' ')}
-              </div>
+                {formatLengthName(length)}
+              </button>
             ))}
           </div>
           <p className="text-xs text-gray-500 mt-1">
-            Coming soon: Customize default comment length
+            Select your preferred default comment length for generated comments
           </p>
         </div>
 
@@ -281,8 +366,17 @@ const OptionsPage: React.FC = () => {
               { value: 'curious', icon: '🤔' },
               { value: 'professional', icon: '👔' }
             ].map((tone) => (
-              <div
+              <button
                 key={tone.value}
+                type="button"
+                onClick={() => {
+                  setState(prev => ({
+                    ...prev,
+                    statusMessage: `Tone selection coming soon: ${tone.value}`,
+                    statusType: 'info'
+                  }));
+                  setTimeout(clearStatus, 3000);
+                }}
                 className={`
                   p-2 rounded-md text-center cursor-pointer text-sm border
                   ${tone.value === 'professional' ? 'bg-blue-100 border-blue-300' : 'bg-gray-50 border-gray-200 hover:bg-gray-100'}
@@ -290,7 +384,7 @@ const OptionsPage: React.FC = () => {
               >
                 <div className="text-lg mb-1">{tone.icon}</div>
                 {tone.value}
-              </div>
+              </button>
             ))}
           </div>
           <p className="text-xs text-gray-500 mt-1">

@@ -19,7 +19,44 @@ export class CommentDisplay implements ICommentDisplay {
   constructor() {
     this.logger = new Logger('CommentDisplay');
     this.themeDetector = new ThemeDetector();
+    
+    // Load user preference
+    this.loadLengthPreference();
   }
+  
+  /**
+   * Load comment length preference from storage
+   */
+  private async loadLengthPreference(): Promise<void> {
+    try {
+      const response = await chrome.runtime.sendMessage({ 
+        type: 'GET_COMMENT_LENGTH_PREFERENCE' 
+      });
+      
+      if (response && response.preference) {
+        this.selectedLength = response.preference;
+        this.logger.info('Loaded length preference:', this.selectedLength);
+      }
+    } catch (error) {
+      this.logger.error('Error loading length preference:', error);
+    }
+  }
+  
+  /**
+   * Save comment length preference to storage
+   */
+  private async saveLengthPreference(length: CommentLength): Promise<void> {
+    try {
+      await chrome.runtime.sendMessage({ 
+        type: 'SET_COMMENT_LENGTH_PREFERENCE',
+        payload: length
+      });
+      this.logger.info('Saved length preference:', length);
+    } catch (error) {
+      this.logger.error('Error saving length preference:', error);
+    }
+  }
+  
   /**
    * Show the comments UI for a field
    * @param comments Generated comments
@@ -174,6 +211,9 @@ export class CommentDisplay implements ICommentDisplay {
             const isCurrentButton = btn === option;
             this.applyButtonStyle(btn, isCurrentButton, isDarkMode);
           });
+          
+          // Save the user's preference
+          this.saveLengthPreference(length);
           
           // Generate new comments with the selected length
           this.regenerateComments(fieldId, commentsUI);

@@ -19,11 +19,13 @@ export function useMessageService() {
   ): Promise<T | null> => {
     setIsLoading(true);
     setError(null);
+    console.log('Sending message:', message);
 
     try {
       return new Promise<T | null>((resolve) => {
         chrome.runtime.sendMessage(message, (response) => {
           setIsLoading(false);
+          console.log('Received response:', response);
 
           if (chrome.runtime.lastError) {
             const errorMessage = chrome.runtime.lastError.message || 'Unknown error';
@@ -41,6 +43,7 @@ export function useMessageService() {
           }
 
           if (onSuccess) {
+            console.log('Calling onSuccess with response');
             onSuccess(response as T);
           }
           

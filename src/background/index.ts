@@ -2,6 +2,7 @@
 
 import { ApiKeyService } from '../core/services/ApiKeyService';
 import { CommentGenerationService } from '../core/services/CommentGenerationService';
+import { UserPreferencesService } from '../core/services/UserPreferencesService';
 import { ErrorHandler } from '../core/utils/ErrorHandler';
 
 console.log('EngageIQ background service worker loaded');
@@ -142,6 +143,34 @@ chrome.runtime.onMessage.addListener((
                            isRateLimitError ? 'RATE_LIMIT' : 'OTHER'
               });
             }
+            break;
+          }
+          
+          case 'GET_COMMENT_LENGTH_PREFERENCE': {
+            const preference = await UserPreferencesService.getCommentLengthPreference();
+            sendResponse({ preference });
+            break;
+          }
+          
+          case 'SET_COMMENT_LENGTH_PREFERENCE': {
+            console.log('Saving comment length preference:', message.payload);
+            try {
+              await UserPreferencesService.saveCommentLengthPreference(message.payload);
+              console.log('Successfully saved length preference');
+              sendResponse({ success: true });
+            } catch (error) {
+              console.error('Error saving length preference:', error);
+              sendResponse({ 
+                success: false, 
+                error: `Failed to save preference: ${error instanceof Error ? error.message : String(error)}` 
+              });
+            }
+            break;
+          }
+          
+          case 'RESET_COMMENT_LENGTH_PREFERENCE': {
+            await UserPreferencesService.resetCommentLengthPreference();
+            sendResponse({ success: true });
             break;
           }
           
