@@ -296,7 +296,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-**❌ Sub-Step 15.2: Redesign Comment Display as Movable Floating Popup**
+**✅ Sub-Step 15.2: Redesign Comment Display as Movable Floating Popup**
 **Tasks:**
 - Redesign the comment display UI as a floating popup that utilizes more screen width
 - Implement drag-and-drop functionality to allow users to reposition the popup
