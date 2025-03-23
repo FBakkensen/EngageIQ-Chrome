@@ -768,35 +768,11 @@ export class CommentDisplay implements ICommentDisplay {
       ', 0 0 30px rgba(0, 115, 177, 0.05)' :
       ', 0 0 30px rgba(10, 102, 194, 0.05)';
       
-    // Add jiggle animation to indicate draggability
+    // Fade in the popup
     setTimeout(() => {
-      // First make the popup visible
+      // Make the popup visible with a smooth transition
       popup.style.opacity = '1';
       popup.style.transform = 'translateY(0)';
-      
-      // Then add a slight jiggle animation after the popup is visible
-      setTimeout(() => {
-        // Add keyframes for the jiggle animation
-        const styleSheet = document.createElement('style');
-        styleSheet.textContent = `
-          @keyframes jiggle {
-            0% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            50% { transform: translateX(5px); }
-            75% { transform: translateX(-3px); }
-            100% { transform: translateX(0); }
-          }
-        `;
-        document.head.appendChild(styleSheet);
-        
-        // Apply the animation
-        popup.style.animation = 'jiggle 0.5s ease-in-out 1';
-        
-        // Remove the animation after it's complete
-        setTimeout(() => {
-          popup.style.animation = '';
-        }, 500);
-      }, 300);
     }, 10);
   }
   
