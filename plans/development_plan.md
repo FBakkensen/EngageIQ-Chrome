@@ -331,11 +331,33 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 5. Test accessibility by ensuring screen readers can interpret the button's function
 6. Verify the button works correctly on different screen sizes and resolutions
 
+**Next Step:** Enhance comment readability and structure.
+
+---
+
+### Step 16: Enhance Comment Readability and Structure
+**Tasks:**
+- Implement structural formatting (paragraphs, bullet points) for generated comments
+- Add appropriate emojis that match the selected tone of the comment
+- Create spacing rules to improve visual scanning of comments
+- Implement line breaks at appropriate semantic points
+- Add opening and closing elements for longer comments
+- Update prompt engineering to incorporate LinkedIn best practices for engagement
+
+**Verification:**
+1. Verify generated comments include appropriate paragraph breaks for readability
+2. Confirm emojis are correctly matched to the tone and content of comments
+3. Test readability across different comment lengths (short, medium, long)
+4. Ensure consistent formatting patterns across different post types
+5. Compare comment formatting with high-engagement LinkedIn comments for best practices
+6. Verify proper spacing and visual hierarchy in generated comments
+7. Test that special characters and unicode emojis display correctly across platforms
+
 **Next Step:** Enhance multilingual support.
 
 ---
 
-### Step 16: Enhance Multilingual Support
+### Step 17: Enhance Multilingual Support
 **Tasks:**
 - Improve language detection in post extraction
 - Update prompt engineering for language matching
@@ -350,7 +372,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-### Step 17: Add Image Content Processing
+### Step 18: Add Image Content Processing
 **Tasks:**
 - Enhance post extraction to handle images
 - Update API integration for image processing
@@ -367,7 +389,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ## Phase 4: Robustness & Polish
 
-### Step 18: Enhance Error Handling
+### Step 19: Enhance Error Handling
 **Tasks:**
 - Implement comprehensive error handling
 - Add user-friendly error messages
@@ -382,7 +404,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-### Step 19: Implement Performance Optimizations
+### Step 20: Implement Performance Optimizations
 **Tasks:**
 - Add debouncing for event listeners
 - Optimize DOM operations
@@ -397,7 +419,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-### Step 20: Add Visual Polish and Feedback
+### Step 21: Add Visual Polish and Feedback
 **Tasks:**
 - Refine UI animations and transitions
 - Add loading indicators
@@ -412,7 +434,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-### Step 21: Prepare for Future Enhancements
+### Step 22: Prepare for Future Enhancements
 **Tasks:**
 - Refactor code for modularity
 - Add extension points for future features
@@ -427,7 +449,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-### Step 22: Finalize and Package
+### Step 23: Finalize and Package
 **Tasks:**
 - Perform end-to-end testing
 - Optimize bundle size
