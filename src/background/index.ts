@@ -81,15 +81,43 @@ chrome.runtime.onMessage.addListener((
             try {
               const { postContent, options, fieldId } = message.payload;
               
+              // Valid post types
+              const validPostTypes = ['text', 'image', 'article', 'video', 'poll', 'document', 'job', 'event', 'share'];
+              
+              // Validate required fields and provide defaults to prevent null/undefined errors
+              const validatedPostContent = {
+                text: typeof postContent.text === 'string' ? postContent.text : 'No text content',
+                author: typeof postContent.author === 'string' ? postContent.author : 'Unknown author',
+                url: typeof postContent.url === 'string' ? postContent.url : '',
+                postType: (typeof postContent.postType === 'string' && 
+                          validPostTypes.includes(postContent.postType)) 
+                          ? postContent.postType : 'text',
+                // Include other properties from postContent that we didn't explicitly set
+                authorTitle: postContent.authorTitle,
+                authorCompany: postContent.authorCompany,
+                images: postContent.images,
+                timestamp: postContent.timestamp,
+                engagement: postContent.engagement,
+                hashtags: postContent.hashtags,
+                mentions: postContent.mentions,
+              };
+              
+              // Ensure options is properly structured
+              const validatedOptions = {
+                tone: options?.tone || 'all',
+                length: options?.length || 'medium'
+                // Add any other required option properties here
+              };
+              
               // Log some details about the request
               console.log('Generating comment with the following data:');
-              console.log('Post text:', postContent.text?.substring(0, 100) + (postContent.text?.length > 100 ? '...' : ''));
-              console.log('Post type:', postContent.postType);
-              console.log('Options:', JSON.stringify(options));
+              console.log('Post text:', validatedPostContent.text?.substring(0, 100) + (validatedPostContent.text?.length > 100 ? '...' : ''));
+              console.log('Post type:', validatedPostContent.postType);
+              console.log('Options:', JSON.stringify(validatedOptions));
               console.log('Field ID:', fieldId);
               
               // Generate comments
-              const comments = await CommentGenerationService.generateComments(postContent, options);
+              const comments = await CommentGenerationService.generateComments(validatedPostContent, validatedOptions);
               
               // Log success (but not the actual comments to avoid cluttering logs)
               console.log('Comment generation successful with Gemini API');
