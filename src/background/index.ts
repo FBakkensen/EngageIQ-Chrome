@@ -133,6 +133,20 @@ chrome.runtime.onMessage.addListener((
               // Log the error
               ErrorHandler.handleError(error as Error, 'CommentGeneration');
               
+              // Send error message to content script
+              if (sender && sender.tab && sender.tab.id) {
+                chrome.tabs.sendMessage(sender.tab.id, {
+                  type: 'COMMENT_GENERATION_ERROR',
+                  payload: {
+                    error: userFriendlyMessage,
+                    fieldId: message.payload.fieldId
+                  }
+                });
+                console.log('Sent COMMENT_GENERATION_ERROR message to content script');
+              } else {
+                console.error('Cannot send COMMENT_GENERATION_ERROR message: sender tab information missing');
+              }
+              
               // Send response with appropriate error message
               sendResponse({ 
                 success: false,

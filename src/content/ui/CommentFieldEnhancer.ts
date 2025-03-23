@@ -5,9 +5,30 @@ import { Logger } from '../services/Logger';
  */
 export class CommentFieldEnhancer {
   private logger: Logger;
+  private isGenerating: boolean = false;
   
   constructor() {
     this.logger = new Logger('CommentFieldEnhancer');
+    
+    // Add spinner animation style if not already present
+    this.addSpinnerStyle();
+  }
+  
+  /**
+   * Add spinner animation style to document head if not already present
+   */
+  private addSpinnerStyle(): void {
+    if (!document.querySelector('#engageiq-spinner-style')) {
+      const style = document.createElement('style');
+      style.id = 'engageiq-spinner-style';
+      style.textContent = `
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `;
+      document.head.appendChild(style);
+    }
   }
   
   /**
@@ -80,6 +101,9 @@ export class CommentFieldEnhancer {
     // Add focus and blur event listeners to manage button
     this.attachFieldFocusEvents(button, field);
     
+    // Listen for comment generation completion
+    this.setupMessageListener(button);
+    
     this.logger.info('ENHANCEMENT: Field enhanced with ID:', field.id);
     return field.id;
   }
@@ -108,6 +132,9 @@ export class CommentFieldEnhancer {
       position: absolute;
       z-index: 9999;
       box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
     `;
     
     // Hover effects
@@ -168,7 +195,16 @@ export class CommentFieldEnhancer {
       e.preventDefault();
       e.stopPropagation();
       
+      // Prevent multiple clicks
+      if (this.isGenerating) {
+        this.logger.info('Generate button clicked but generation already in progress');
+        return;
+      }
+      
       this.logger.info('Generate button clicked for field:', field.id);
+      
+      // Show loading state
+      this.showButtonLoadingState(button);
       
       // Get saved length preference
       let lengthPreference = 'medium'; // Default to medium if preference can't be retrieved
@@ -185,6 +221,9 @@ export class CommentFieldEnhancer {
         }
       } catch (error) {
         this.logger.error('Error getting length preference:', error);
+        // Reset loading state on error
+        this.resetButtonLoadingState(button);
+        return;
       }
       
       // Extract post content
@@ -204,9 +243,81 @@ export class CommentFieldEnhancer {
       }, (response) => {
         this.logger.info('Generate comment response:', response);
         
+        if (response && response.error) {
+          // Reset loading state on error
+          this.resetButtonLoadingState(button);
+        }
+        
         // For debugging - we should now receive a COMMENT_GENERATED message from background script
         this.logger.info('Waiting for COMMENT_GENERATED message...');
       });
+    });
+  }
+  
+  /**
+   * Show loading state on the button
+   */
+  private showButtonLoadingState(button: HTMLElement): void {
+    this.isGenerating = true;
+    
+    // Store original text
+    button.setAttribute('data-original-text', button.textContent || 'Generate Comment');
+    
+    // Clear button text
+    button.textContent = '';
+    
+    // Create spinner
+    const spinner = document.createElement('div');
+    spinner.className = 'engageiq-button-spinner';
+    spinner.style.cssText = `
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-top: 2px solid #ffffff;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    `;
+    
+    // Add spinner to button
+    button.appendChild(spinner);
+    
+    // Disable button style
+    button.style.opacity = '0.8';
+    button.style.cursor = 'default';
+  }
+  
+  /**
+   * Reset loading state on the button
+   */
+  private resetButtonLoadingState(button: HTMLElement): void {
+    this.isGenerating = false;
+    
+    // Restore original text
+    const originalText = button.getAttribute('data-original-text') || 'Generate Comment';
+    button.textContent = originalText;
+    
+    // Reset button style
+    button.style.opacity = '1';
+    button.style.cursor = 'pointer';
+  }
+  
+  /**
+   * Setup message listener for comment generation completion
+   */
+  private setupMessageListener(button: HTMLElement): void {
+    chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
+      if (message.type === 'COMMENT_GENERATED' || message.type === 'COMMENT_GENERATION_ERROR') {
+        // Field ID for this button
+        const fieldId = button.getAttribute('data-field-id');
+        
+        // Check if this is for our field
+        if (message.payload && message.payload.fieldId === fieldId) {
+          this.logger.info('Comment generation completed for field:', fieldId);
+          this.resetButtonLoadingState(button);
+        }
+      }
+      return true; // Keep the message channel open for async response
     });
   }
   
