@@ -302,6 +302,8 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 - Implement drag-and-drop functionality to allow users to reposition the popup
 - Ensure the popup respects screen boundaries and maintains visibility
 - Update styling to match LinkedIn's design language
+- Add tabs for each comment style
+- Make a visual style to the box that emphasis that it is floating
 
 **Verification:**
 1. Generate a comment and verify the new floating popup design appears
@@ -316,7 +318,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-**❌ Sub-Step 15.3: Replace Text on 'Generate Comment' Button with Image**
+**✅ Sub-Step 15.3: Replace Text on 'Generate Comment' Button with Image**
 **Tasks:**
 - Extract and prepare the icon image used for the extension
 - Modify the 'Generate Comment' button to use the icon image instead of text

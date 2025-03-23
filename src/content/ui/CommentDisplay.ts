@@ -56,6 +56,9 @@ export class CommentDisplay implements ICommentDisplay {
       }
     } catch (error) {
       this.logger.error('Error loading length preference:', error);
+      // Fall back to default preference if context is invalidated
+      this.selectedLength = 'medium';
+      this.savedUserPreference = 'medium';
     }
   }
   
@@ -111,6 +114,8 @@ export class CommentDisplay implements ICommentDisplay {
             forceUpdateTag.id = 'engageiq-force-selection-update';
             forceUpdateTag.style.display = 'none';
             forceUpdateTag.dataset.length = this.selectedLength;
+            // Add a flag to center the next popup
+            forceUpdateTag.dataset.centerPopup = 'true';
             
             // Remove any existing tag
             const existingTag = document.getElementById('engageiq-force-selection-update');
@@ -274,46 +279,42 @@ export class CommentDisplay implements ICommentDisplay {
     // Determine if we're in dark mode
     const isDarkMode = this.themeDetector.isDarkMode();
     
-    // Create the comments UI container - now wider and floating
+    // Create the comments UI container - enhanced floating design with more width
     const commentsUI = document.createElement('div');
     commentsUI.className = 'engageiq-comments-ui';
     commentsUI.style.cssText = `
       position: fixed;
-      width: 480px;
-      max-width: 90vw;
+      width: 550px;
+      max-width: 95vw;
       background-color: ${isDarkMode ? '#1d2226' : 'white'};
       color: ${isDarkMode ? '#f5f5f5' : '#1d2226'};
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, ${isDarkMode ? '0.4' : '0.2'});
       z-index: 9999;
-      padding: 16px;
+      padding: 20px;
       max-height: 80vh;
       overflow-y: auto;
       font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-      transition: box-shadow 0.2s;
+      transition: all 0.2s ease-in-out;
       border: 1px solid ${isDarkMode ? '#3d3d3d' : '#e3e3e3'};
     `;
     
     // Position the comments UI
-    const fieldRect = field.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const popupWidth = 480; // Match width from CSS above
+    const popupWidth = 550; // Match width from CSS above
+    const popupHeight = 450; // Approximate height for calculations
     
-    // Calculate initial position to ensure it's visible
-    let initialTop = fieldRect.bottom + 8;
-    let initialLeft = Math.max(4, Math.min(fieldRect.left, viewportWidth - popupWidth - 4));
-    
-    // Adjust vertical position if near bottom of viewport
-    if (initialTop + 300 > viewportHeight) { // 300px is an estimated minimum height
-      initialTop = Math.max(8, viewportHeight - 300 - 8);
-    }
+    // ALWAYS center the popup in the viewport - this is the most reliable approach
+    const initialLeft = Math.max(0, (viewportWidth - popupWidth) / 2);
+    const initialTop = Math.max(0, (viewportHeight - popupHeight) / 2);
+    this.logger.info('Positioning popup in center of screen', { initialLeft, initialTop });
     
     // Set initial position
     commentsUI.style.top = `${initialTop}px`;
     commentsUI.style.left = `${initialLeft}px`;
     
-    // Create header with drag handle styling
+    // Create header with enhanced drag handle styling
     const header = document.createElement('div');
     header.style.cssText = `
       display: flex;
@@ -321,17 +322,116 @@ export class CommentDisplay implements ICommentDisplay {
       align-items: center;
       margin-bottom: 16px;
       cursor: move;
-      padding-bottom: 8px;
+      padding-bottom: 12px;
       border-bottom: 1px solid ${isDarkMode ? '#3d3d3d' : '#e3e3e3'};
     `;
     
-    // Add drag indicator to visually show it's draggable
+    // Add improved drag indicator to visually show it's draggable
     const dragIndicator = document.createElement('div');
     dragIndicator.style.cssText = `
       display: flex;
       align-items: center;
-      gap: 2px;
+      gap: 3px;
+      padding: 6px 8px;
+      background-color: ${isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.07)'};
+      border-radius: 4px;
+      margin-right: 8px;
+      cursor: move;
+      position: relative;
+      border: 1px solid ${isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'};
+      transition: background-color 0.2s;
     `;
+    
+    // Add tooltip for drag handle with improved styling
+    const dragTooltip = document.createElement('span');
+    dragTooltip.textContent = 'Drag here to move • Double-click to center';
+    dragTooltip.style.cssText = `
+      position: absolute;
+      background-color: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s, visibility 0.2s;
+      pointer-events: none;
+      top: -36px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10000;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    `;
+    
+    // Add a small arrow at the bottom of the tooltip
+    const tooltipArrow = document.createElement('div');
+    tooltipArrow.style.cssText = `
+      position: absolute;
+      bottom: -4px;
+      left: 50%;
+      transform: translateX(-50%) rotate(45deg);
+      width: 8px;
+      height: 8px;
+      background-color: rgba(0, 0, 0, 0.8);
+      border-right: 1px solid rgba(255, 255, 255, 0.1);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    `;
+    dragTooltip.appendChild(tooltipArrow);
+    
+    // Show tooltip initially and hide after 3 seconds
+    setTimeout(() => {
+      dragTooltip.style.opacity = '1';
+      dragTooltip.style.visibility = 'visible';
+      
+      // Add a subtle pulse animation to draw attention
+      const pulseStyle = document.createElement('style');
+      pulseStyle.textContent = `
+        @keyframes pulse {
+          0% { transform: translateX(-50%) scale(1); }
+          50% { transform: translateX(-50%) scale(1.05); }
+          100% { transform: translateX(-50%) scale(1); }
+        }
+      `;
+      document.head.appendChild(pulseStyle);
+      dragTooltip.style.animation = 'pulse 1s ease-in-out 3';
+      
+      // Hide tooltip after 3 seconds
+      setTimeout(() => {
+        dragTooltip.style.opacity = '0';
+        dragTooltip.style.visibility = 'hidden';
+        dragTooltip.style.animation = '';
+      }, 3000);
+    }, 800); // Show after initial popup animation finishes
+    
+    // Standard hover behavior for tooltip after initial display
+    dragIndicator.addEventListener('mouseenter', () => {
+      // Only show if it's not already visible
+      if (dragTooltip.style.visibility !== 'visible') {
+        dragTooltip.style.opacity = '1';
+        dragTooltip.style.visibility = 'visible';
+        dragTooltip.style.animation = ''; // Remove any animation
+      }
+      
+      // Change background color on hover
+      dragIndicator.style.backgroundColor = isDarkMode ? 
+        'rgba(255, 255, 255, 0.12)' : 
+        'rgba(0, 0, 0, 0.1)';
+    });
+    
+    dragIndicator.addEventListener('mouseleave', () => {
+      dragTooltip.style.opacity = '0';
+      dragTooltip.style.visibility = 'hidden';
+      
+      // Reset background color
+      dragIndicator.style.backgroundColor = isDarkMode ? 
+        'rgba(255, 255, 255, 0.08)' : 
+        'rgba(0, 0, 0, 0.07)';
+    });
+    
+    dragIndicator.appendChild(dragTooltip);
     
     for (let i = 0; i < 3; i++) {
       const dot = document.createElement('div');
@@ -339,7 +439,7 @@ export class CommentDisplay implements ICommentDisplay {
         width: 4px;
         height: 4px;
         border-radius: 50%;
-        background-color: ${isDarkMode ? '#8e8e8e' : '#8e8e8e'};
+        background-color: ${isDarkMode ? '#b0b0b0' : '#555'};
       `;
       dragIndicator.appendChild(dot);
     }
@@ -367,11 +467,21 @@ export class CommentDisplay implements ICommentDisplay {
     closeButton.style.cssText = `
       background: none;
       border: none;
-      font-size: 20px;
+      font-size: 22px;
       cursor: pointer;
       color: ${isDarkMode ? '#f5f5f5' : '#1d2226'};
       padding: 4px 8px;
+      transition: opacity 0.2s;
+      opacity: 0.8;
     `;
+    
+    closeButton.addEventListener('mouseenter', () => {
+      closeButton.style.opacity = '1';
+    });
+    
+    closeButton.addEventListener('mouseleave', () => {
+      closeButton.style.opacity = '0.8';
+    });
     
     // Add click handler to restore the button when closing
     closeButton.addEventListener('click', () => {
@@ -396,22 +506,244 @@ export class CommentDisplay implements ICommentDisplay {
     const lengthPreferenceSection = this.createLengthPreferenceSelector(isDarkMode, fieldId, commentsUI);
     commentsUI.appendChild(lengthPreferenceSection);
     
-    // Create content
-    const content = document.createElement('div');
+    // Create tabbed content container
+    const tabsContainer = document.createElement('div');
+    tabsContainer.className = 'engageiq-tabs-container';
     
-    // Add each comment
-    for (const tone in comments) {
-      const commentCard = this.createCommentCard(comments[tone], tone, isDarkMode, fieldId, commentsUI);
-      content.appendChild(commentCard);
-    }
+    // Create tabs navigation
+    const tabsNav = document.createElement('div');
+    tabsNav.className = 'engageiq-tabs-nav';
+    tabsNav.style.cssText = `
+      display: flex;
+      border-bottom: 1px solid ${isDarkMode ? '#3d3d3d' : '#e3e3e3'};
+      margin-bottom: 16px;
+      overflow-x: auto;
+      scrollbar-width: none; /* Firefox */
+    `;
     
-    commentsUI.appendChild(content);
+    // Hide scrollbar for Chrome/Safari/Edge
+    tabsNav.addEventListener('mouseenter', () => {
+      tabsNav.style.cssText += `
+        ::-webkit-scrollbar {
+          height: 0;
+          background: transparent;
+        }
+      `;
+    });
+    
+    // Create tab content container
+    const tabContent = document.createElement('div');
+    tabContent.className = 'engageiq-tab-content';
+    
+    // Get all tone names
+    const tones = Object.keys(comments);
+    let activeTab = 0; // Default active tab
+    
+    // Create tab for each tone
+    tones.forEach((tone, index) => {
+      // Create tab button
+      const tabButton = document.createElement('button');
+      tabButton.textContent = this.formatToneName(tone);
+      tabButton.dataset.tab = index.toString();
+      tabButton.className = index === activeTab ? 'active' : '';
+      tabButton.style.cssText = `
+        padding: 10px 16px;
+        background: none;
+        border: none;
+        border-bottom: 3px solid ${index === activeTab ? 
+          (isDarkMode ? '#0073b1' : '#0a66c2') : 'transparent'};
+        color: ${index === activeTab ? 
+          (isDarkMode ? '#f5f5f5' : '#0a66c2') : 
+          (isDarkMode ? '#a5a5a5' : '#666')};
+        font-weight: ${index === activeTab ? '600' : '400'};
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+        flex-shrink: 0;
+      `;
+      
+      // Tab button hover effect
+      tabButton.addEventListener('mouseenter', () => {
+        if (tabButton.className !== 'active') {
+          tabButton.style.color = isDarkMode ? '#d0d0d0' : '#0a66c2';
+          tabButton.style.borderBottomColor = isDarkMode ? 'rgba(0, 115, 177, 0.3)' : 'rgba(10, 102, 194, 0.3)';
+        }
+      });
+      
+      tabButton.addEventListener('mouseleave', () => {
+        if (tabButton.className !== 'active') {
+          tabButton.style.color = isDarkMode ? '#a5a5a5' : '#666';
+          tabButton.style.borderBottomColor = 'transparent';
+        }
+      });
+      
+      // Tab click handler
+      tabButton.addEventListener('click', () => {
+        // Update active tab
+        document.querySelectorAll('.engageiq-tabs-nav button').forEach(btn => {
+          (btn as HTMLElement).className = '';
+          (btn as HTMLElement).style.fontWeight = '400';
+          (btn as HTMLElement).style.color = isDarkMode ? '#a5a5a5' : '#666';
+          (btn as HTMLElement).style.borderBottomColor = 'transparent';
+        });
+        
+        tabButton.className = 'active';
+        tabButton.style.fontWeight = '600';
+        tabButton.style.color = isDarkMode ? '#f5f5f5' : '#0a66c2';
+        tabButton.style.borderBottomColor = isDarkMode ? '#0073b1' : '#0a66c2';
+        
+        // Show selected tab content
+        document.querySelectorAll('.engageiq-tab-content > div').forEach(content => {
+          (content as HTMLElement).style.display = 'none';
+        });
+        
+        // Fix: Add proper null check and type assertion
+        const selectedTab = document.querySelector(`.engageiq-tab-content > div[data-tab="${index}"]`) as HTMLElement | null;
+        if (selectedTab) {
+          selectedTab.style.display = 'block';
+        }
+      });
+      
+      tabsNav.appendChild(tabButton);
+      
+      // Create tab content
+      const tabPane = document.createElement('div');
+      tabPane.dataset.tab = index.toString();
+      tabPane.style.cssText = `
+        display: ${index === activeTab ? 'block' : 'none'};
+      `;
+      
+      // Create comment card for this tone
+      const commentText = document.createElement('div');
+      commentText.textContent = comments[tone];
+      commentText.style.cssText = `
+        font-size: 15px;
+        line-height: 1.5;
+        margin-bottom: 16px;
+        white-space: pre-wrap;
+        padding: 12px;
+        border-radius: 8px;
+        background-color: ${isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)'};
+      `;
+      
+      // Button container
+      const buttonContainer = document.createElement('div');
+      buttonContainer.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 16px;
+      `;
+      
+      // Copy button
+      const copyButton = document.createElement('button');
+      copyButton.textContent = 'Copy';
+      copyButton.style.cssText = `
+        background-color: transparent;
+        border: 1px solid ${isDarkMode ? '#0073b1' : '#0a66c2'};
+        color: ${isDarkMode ? '#0073b1' : '#0a66c2'};
+        border-radius: 16px;
+        padding: 8px 16px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        flex: 1;
+        transition: all 0.2s;
+      `;
+      
+      copyButton.addEventListener('mouseenter', () => {
+        copyButton.style.backgroundColor = isDarkMode ? 'rgba(0, 115, 177, 0.1)' : 'rgba(10, 102, 194, 0.1)';
+      });
+      
+      copyButton.addEventListener('mouseleave', () => {
+        copyButton.style.backgroundColor = 'transparent';
+      });
+      
+      copyButton.addEventListener('click', () => {
+        navigator.clipboard.writeText(comments[tone]).then(() => {
+          const originalText = copyButton.textContent;
+          copyButton.textContent = 'Copied!';
+          setTimeout(() => {
+            copyButton.textContent = originalText;
+          }, 2000);
+        });
+      });
+      
+      // Use button
+      const useButton = document.createElement('button');
+      useButton.textContent = 'Use This Comment';
+      useButton.style.cssText = `
+        background-color: ${isDarkMode ? '#0073b1' : '#0a66c2'};
+        color: white;
+        border: none;
+        border-radius: 16px;
+        padding: 8px 16px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        flex: 2;
+        transition: all 0.2s;
+      `;
+      
+      useButton.addEventListener('mouseenter', () => {
+        useButton.style.backgroundColor = isDarkMode ? '#0083c7' : '#0b76df';
+      });
+      
+      useButton.addEventListener('mouseleave', () => {
+        useButton.style.backgroundColor = isDarkMode ? '#0073b1' : '#0a66c2';
+      });
+      
+      useButton.addEventListener('click', () => {
+        // Use the local message handler instead of sending to background script
+        try {
+          console.log('⭐ CommentDisplay: Inserting comment directly');
+          
+          // Use custom event to communicate within content script
+          const insertEvent = new CustomEvent('engageiq:insert-comment', {
+            detail: {
+              comment: comments[tone],
+              elementId: fieldId
+            },
+            bubbles: true
+          });
+          document.dispatchEvent(insertEvent);
+          
+          // Restore the Generate Comment button before closing
+          const generateButton = document.querySelector(`button[data-field-id="${fieldId}"]`) as HTMLElement;
+          if (generateButton) {
+            generateButton.style.display = 'block';
+            // Use improved tooltip reset method
+            this.resetTooltipState(generateButton);
+            this.logger.info('Restored Generate Comment button on comment insertion');
+          }
+          
+          // Close the comment UI
+          commentsUI.remove();
+        } catch (error) {
+          console.error('⭐ CommentDisplay: Error inserting comment:', error);
+        }
+      });
+      
+      buttonContainer.appendChild(copyButton);
+      buttonContainer.appendChild(useButton);
+      
+      tabPane.appendChild(commentText);
+      tabPane.appendChild(buttonContainer);
+      tabContent.appendChild(tabPane);
+    });
+    
+    tabsContainer.appendChild(tabsNav);
+    tabsContainer.appendChild(tabContent);
+    commentsUI.appendChild(tabsContainer);
     
     // Add keyboard handling
-    this.setupKeyboardNavigation(commentsUI);
+    this.setupKeyboardNavigationForTabs(commentsUI, tones.length);
     
     // Add to DOM
     document.body.appendChild(commentsUI);
+    
+    // Apply visual enhancements - all animations are now handled here
+    this.applyPopupVisualEnhancements(commentsUI, isDarkMode);
     
     // Set up a MutationObserver to detect when the popup is removed from the DOM
     // (in case it's removed by any method other than the close button)
@@ -437,18 +769,159 @@ export class CommentDisplay implements ICommentDisplay {
     
     // Start observing the document body for removed children
     buttonRestoreObserver.observe(document.body, { childList: true, subtree: true });
-    
-    // Visual enhancement on popup appearance
-    setTimeout(() => {
-      commentsUI.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.2)';
-    }, 50);
-    
-    // Double-check button selection after rendering
-    setTimeout(() => {
-      this.doubleCheckButtonSelection(commentsUI);
-    }, 50);
   }
   
+  /**
+   * Apply visual enhancements to the popup
+   */
+  private applyPopupVisualEnhancements(popup: HTMLElement, isDarkMode: boolean): void {
+    // Set initial state for animation
+    popup.style.opacity = '0';
+    popup.style.transform = 'translateY(8px)';
+    
+    // Add floating appearance
+    popup.style.boxShadow = isDarkMode ? 
+      '0 10px 30px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05)' : 
+      '0 10px 30px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05)';
+    
+    // Add subtle border glow for floating effect
+    popup.style.boxShadow += isDarkMode ?
+      ', 0 0 30px rgba(0, 115, 177, 0.05)' :
+      ', 0 0 30px rgba(10, 102, 194, 0.05)';
+      
+    // Add jiggle animation to indicate draggability
+    setTimeout(() => {
+      // First make the popup visible
+      popup.style.opacity = '1';
+      popup.style.transform = 'translateY(0)';
+      
+      // Then add a slight jiggle animation after the popup is visible
+      setTimeout(() => {
+        // Add keyframes for the jiggle animation
+        const styleSheet = document.createElement('style');
+        styleSheet.textContent = `
+          @keyframes jiggle {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-3px); }
+            100% { transform: translateX(0); }
+          }
+        `;
+        document.head.appendChild(styleSheet);
+        
+        // Apply the animation
+        popup.style.animation = 'jiggle 0.5s ease-in-out 1';
+        
+        // Remove the animation after it's complete
+        setTimeout(() => {
+          popup.style.animation = '';
+        }, 500);
+      }, 300);
+    }, 10);
+  }
+  
+  /**
+   * Enhanced keyboard navigation for tabbed interface
+   */
+  private setupKeyboardNavigationForTabs(commentsUI: HTMLElement, numTabs: number): void {
+    let currentTabIndex = 0;
+    
+    const keydownHandler = (e: KeyboardEvent) => {
+      // Check if our UI is open
+      if (!document.body.contains(commentsUI)) {
+        document.removeEventListener('keydown', keydownHandler);
+        return;
+      }
+      
+      // Handle escape key to close
+      if (e.key === 'Escape') {
+        const closeButton = commentsUI.querySelector('button') as HTMLElement;
+        if (closeButton) {
+          closeButton.click();
+        }
+        document.removeEventListener('keydown', keydownHandler);
+        return;
+      }
+      
+      // Handle tab navigation with arrow keys
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault(); // Prevent scrolling
+        
+        if (e.key === 'ArrowRight') {
+          currentTabIndex = (currentTabIndex + 1) % numTabs;
+        } else {
+          currentTabIndex = (currentTabIndex - 1 + numTabs) % numTabs;
+        }
+        
+        // Click the tab button
+        const tabButton = commentsUI.querySelector(`.engageiq-tabs-nav button[data-tab="${currentTabIndex}"]`) as HTMLElement;
+        if (tabButton) {
+          tabButton.click();
+        }
+      }
+      
+      // Handle Enter key to use currently visible comment
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        const visibleTab = commentsUI.querySelector(`.engageiq-tab-content > div[style*="display: block"]`) as HTMLElement;
+        if (visibleTab) {
+          const useButton = visibleTab.querySelector('button:last-child') as HTMLElement;
+          if (useButton) {
+            useButton.click();
+            document.removeEventListener('keydown', keydownHandler);
+          }
+        }
+      }
+    };
+    
+    document.addEventListener('keydown', keydownHandler);
+    
+    // Ensure cleanup when the popup is removed
+    const cleanupObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'childList') {
+          for (const node of Array.from(mutation.removedNodes)) {
+            if (node === commentsUI || (node as Element).contains(commentsUI)) {
+              document.removeEventListener('keydown', keydownHandler);
+              cleanupObserver.disconnect();
+              return;
+            }
+          }
+        }
+      }
+    });
+    
+    // Start observing the document body for when the popup is removed
+    cleanupObserver.observe(document.body, { childList: true, subtree: true });
+  }
+  
+  /**
+   * Center a popup in the viewport
+   * @param popupElement The popup to center
+   */
+  private centerPopupInViewport(popupElement: HTMLElement): void {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const popupWidth = popupElement.offsetWidth;
+    const popupHeight = popupElement.offsetHeight;
+    
+    // Calculate center position
+    const centerLeft = Math.max(0, (viewportWidth - popupWidth) / 2);
+    const centerTop = Math.max(0, (viewportHeight - popupHeight) / 2);
+    
+    // Smoothly animate to center position
+    popupElement.style.transition = 'left 0.3s ease-out, top 0.3s ease-out';
+    popupElement.style.left = `${centerLeft}px`;
+    popupElement.style.top = `${centerTop}px`;
+    
+    // Reset transition after animation completes
+    setTimeout(() => {
+      popupElement.style.transition = '';
+    }, 300);
+    
+    this.logger.info('Centered popup in viewport', { centerLeft, centerTop });
+  }
+
   /**
    * Implement drag functionality for the popup
    * @param dragHandle The element that initiates the drag action
@@ -458,6 +931,18 @@ export class CommentDisplay implements ICommentDisplay {
     let isDragging = false;
     let offsetX = 0;
     let offsetY = 0;
+    
+    // Add double-click handler to center the popup
+    dragHandle.addEventListener('dblclick', (e) => {
+      // Only allow double-click from the drag handle
+      if (e.target !== dragHandle && !dragHandle.contains(e.target as Node)) {
+        return;
+      }
+      
+      // Center the popup
+      this.centerPopupInViewport(popupElement);
+      e.preventDefault();
+    });
     
     const startDrag = (e: MouseEvent) => {
       // Only allow drag from the drag handle
@@ -563,89 +1048,6 @@ export class CommentDisplay implements ICommentDisplay {
     
     // Observe document.body to catch any DOM changes
     observer.observe(document.body, { childList: true, subtree: true });
-  }
-  
-  /**
-   * Double-check button selection to ensure the UI correctly reflects the selected length
-   * This is a safety measure in case other mechanisms failed
-   */
-  private doubleCheckButtonSelection(commentsUI: HTMLElement): void {
-    try {
-      const buttons = commentsUI.querySelectorAll('button[data-length]');
-      if (buttons.length === 0) {
-        this.debugLog('No length buttons found for double-check');
-        return;
-      }
-      
-      this.debugLog('Double-checking button selection, current selectedLength:', this.selectedLength);
-      let correctButtonFound = false;
-      
-      buttons.forEach((btn) => {
-        const btnLength = (btn as HTMLButtonElement).dataset.length as CommentLength;
-        const shouldBeSelected = btnLength === this.selectedLength;
-        
-        // Check if button style matches expected selection state
-        const isCurrentlySelected = (btn as HTMLButtonElement).style.backgroundColor.includes('0a66c2') || 
-                                   (btn as HTMLButtonElement).style.backgroundColor.includes('0073b1');
-        
-        if (shouldBeSelected !== isCurrentlySelected) {
-          this.debugLog(`Button selection mismatch for "${(btn as HTMLButtonElement).textContent}": ` +
-                        `should be ${shouldBeSelected}, is ${isCurrentlySelected}`);
-          
-          // Fix the button style
-          const isDarkMode = this.themeDetector.isDarkMode();
-          this.applyButtonStyle(btn as HTMLButtonElement, shouldBeSelected, isDarkMode);
-          this.debugLog(`Fixed button style for "${(btn as HTMLButtonElement).textContent}"`);
-        }
-        
-        if (shouldBeSelected) {
-          correctButtonFound = true;
-        }
-      });
-      
-      this.debugLog('Button selection double-check complete, correctButtonFound:', correctButtonFound);
-    } catch (e) {
-      this.debugLog('Error double-checking button selection:', e);
-    }
-  }
-  
-  /**
-   * Add a debug button to force refresh styling
-   */
-  private addDebugRefreshButton(container: HTMLElement, buttons: HTMLButtonElement[], isDarkMode: boolean): void {
-    if (!this._debugMode) return;
-    
-    const debugButtonContainer = document.createElement('div');
-    debugButtonContainer.style.cssText = `
-      margin-top: 10px;
-      text-align: center;
-    `;
-    
-    const refreshButton = document.createElement('button');
-    refreshButton.textContent = 'Debug: Refresh Buttons';
-    refreshButton.style.cssText = `
-      background-color: ${isDarkMode ? '#ff5722' : '#ff9800'};
-      color: white;
-      border: none;
-      border-radius: 4px;
-      padding: 4px 8px;
-      font-size: 10px;
-      cursor: pointer;
-    `;
-    
-    refreshButton.addEventListener('click', () => {
-      this.debugLog('Debug refresh clicked, current selectedLength:', this.selectedLength);
-      
-      buttons.forEach(btn => {
-        const btnLength = btn.dataset.length as CommentLength;
-        const shouldBeSelected = btnLength === this.selectedLength;
-        this.debugLog(`Refreshing button "${btn.textContent}": shouldBeSelected=${shouldBeSelected}, btnLength=${btnLength}`);
-        this.applyButtonStyle(btn, shouldBeSelected, isDarkMode);
-      });
-    });
-    
-    debugButtonContainer.appendChild(refreshButton);
-    container.appendChild(debugButtonContainer);
   }
   
   /**
@@ -852,157 +1254,12 @@ export class CommentDisplay implements ICommentDisplay {
   }
   
   /**
-   * Create a card for a single comment
-   */
-  private createCommentCard(
-    comment: string, 
-    tone: string, 
-    isDarkMode: boolean, 
-    fieldId: string,
-    commentsUI: HTMLElement
-  ): HTMLElement {
-    const card = document.createElement('div');
-    card.style.cssText = `
-      background-color: ${isDarkMode ? '#283339' : '#f5f5f5'};
-      border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 12px;
-    `;
-    
-    // Tone label
-    const toneLabel = document.createElement('div');
-    toneLabel.textContent = this.formatToneName(tone);
-    toneLabel.style.cssText = `
-      font-size: 12px;
-      font-weight: 600;
-      color: ${isDarkMode ? '#a5a5a5' : '#666'};
-      margin-bottom: 8px;
-      text-transform: capitalize;
-    `;
-    
-    // Comment text
-    const commentText = document.createElement('div');
-    commentText.textContent = comment;
-    commentText.style.cssText = `
-      font-size: 14px;
-      line-height: 1.5;
-      margin-bottom: 12px;
-      white-space: pre-wrap;
-    `;
-    
-    // Button container
-    const buttonContainer = document.createElement('div');
-    buttonContainer.style.cssText = `
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-    `;
-    
-    // Copy button
-    const copyButton = document.createElement('button');
-    copyButton.textContent = 'Copy';
-    copyButton.style.cssText = `
-      background-color: transparent;
-      border: 1px solid ${isDarkMode ? '#0073b1' : '#0a66c2'};
-      color: ${isDarkMode ? '#0073b1' : '#0a66c2'};
-      border-radius: 16px;
-      padding: 6px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      flex: 1;
-    `;
-    
-    copyButton.addEventListener('click', () => {
-      navigator.clipboard.writeText(comment).then(() => {
-        const originalText = copyButton.textContent;
-        copyButton.textContent = 'Copied!';
-        setTimeout(() => {
-          copyButton.textContent = originalText;
-        }, 2000);
-      });
-    });
-    
-    // Use button
-    const useButton = document.createElement('button');
-    useButton.textContent = 'Use This Comment';
-    useButton.style.cssText = `
-      background-color: ${isDarkMode ? '#0073b1' : '#0a66c2'};
-      color: white;
-      border: none;
-      border-radius: 16px;
-      padding: 6px 12px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      flex: 2;
-    `;
-    
-    useButton.addEventListener('click', () => {
-      // Use the local message handler instead of sending to background script
-      try {
-        console.log('⭐ CommentDisplay: Inserting comment directly');
-        
-        // Use custom event to communicate within content script
-        const insertEvent = new CustomEvent('engageiq:insert-comment', {
-          detail: {
-            comment,
-            elementId: fieldId
-          },
-          bubbles: true
-        });
-        document.dispatchEvent(insertEvent);
-        
-        // Restore the Generate Comment button before closing
-        const generateButton = document.querySelector(`button[data-field-id="${fieldId}"]`) as HTMLElement;
-        if (generateButton) {
-          generateButton.style.display = 'block';
-          // Use improved tooltip reset method
-          this.resetTooltipState(generateButton);
-          this.logger.info('Restored Generate Comment button on comment insertion');
-        }
-        
-        // Close the comment UI
-        commentsUI.remove();
-      } catch (error) {
-        console.error('⭐ CommentDisplay: Error inserting comment:', error);
-      }
-    });
-    
-    buttonContainer.appendChild(copyButton);
-    buttonContainer.appendChild(useButton);
-    
-    card.appendChild(toneLabel);
-    card.appendChild(commentText);
-    card.appendChild(buttonContainer);
-    
-    return card;
-  }
-  
-  /**
    * Format tone name for display
    */
   private formatToneName(tone: string): string {
     return tone.charAt(0).toUpperCase() + tone.slice(1) + ' tone';
   }
   
-  /**
-   * Set up keyboard navigation for the comments UI
-   */
-  private setupKeyboardNavigation(commentsUI: HTMLElement): void {
-    document.addEventListener('keydown', (e) => {
-      // Check if our UI is open
-      if (!document.body.contains(commentsUI)) {
-        return;
-      }
-      
-      // Handle escape key to close
-      if (e.key === 'Escape') {
-        commentsUI.remove();
-      }
-    });
-  }
-
   /**
    * Regenerate comments with a new length preference
    * @param fieldId ID of the comment field
@@ -1090,6 +1347,8 @@ export class CommentDisplay implements ICommentDisplay {
       forceUpdateTag.id = 'engageiq-force-selection-update';
       forceUpdateTag.style.display = 'none';
       forceUpdateTag.dataset.length = currentLength;
+      // Add a flag to center the next popup
+      forceUpdateTag.dataset.centerPopup = 'true';
       
       // Remove any existing tag
       const existingTag = document.getElementById('engageiq-force-selection-update');
@@ -1106,29 +1365,38 @@ export class CommentDisplay implements ICommentDisplay {
     
     // Send message to background script to generate comment with new length
     // Use the temporary selected length for this request, but don't modify the saved preference
-    chrome.runtime.sendMessage({
-      type: 'GENERATE_COMMENT',
-      payload: {
-        fieldId: fieldId,
-        postContent,
-        options: {
-          tone: 'all',
-          length: currentLength // Using temporary length preference
+    try {
+      chrome.runtime.sendMessage({
+        type: 'GENERATE_COMMENT',
+        payload: {
+          fieldId: fieldId,
+          postContent,
+          options: {
+            tone: 'all',
+            length: currentLength // Using temporary length preference
+          }
         }
-      }
-    }, (response) => {
-      this.logger.info('Regenerated comment response:', response);
-      
-      this.debugLog('Regeneration complete - Setting selectedLength to:', currentLength);
-      // Ensure the selected length is preserved for the next UI display
-      this.selectedLength = currentLength;
-      
-      // Reset regeneration flag after response
-      this._isRegenerating = false;
-      
-      // Remove the current UI since we'll show a new one when we get the COMMENT_GENERATED message
-      commentsUI.remove();
-    });
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          this.handleContextInvalidation(commentsUI, 'Error generating comment: ' + chrome.runtime.lastError.message);
+          return;
+        }
+        
+        this.logger.info('Regenerated comment response:', response);
+        
+        this.debugLog('Regeneration complete - Setting selectedLength to:', currentLength);
+        // Ensure the selected length is preserved for the next UI display
+        this.selectedLength = currentLength;
+        
+        // Reset regeneration flag after response
+        this._isRegenerating = false;
+        
+        // Remove the current UI since we'll show a new one when we get the COMMENT_GENERATED message
+        commentsUI.remove();
+      });
+    } catch (error) {
+      this.handleContextInvalidation(commentsUI, 'Failed to send message to background script');
+    }
   }
   
   /**
@@ -1241,5 +1509,106 @@ export class CommentDisplay implements ICommentDisplay {
     this.resetTooltipState(button);
     
     this.logger.info('Fully restored Generate Comment button');
+  }
+
+  /**
+   * Add a debug button to force refresh styling
+   */
+  private addDebugRefreshButton(container: HTMLElement, buttons: HTMLButtonElement[], isDarkMode: boolean): void {
+    if (!this._debugMode) return;
+    
+    const debugButtonContainer = document.createElement('div');
+    debugButtonContainer.style.cssText = `
+      margin-top: 10px;
+      text-align: center;
+    `;
+    
+    const refreshButton = document.createElement('button');
+    refreshButton.textContent = 'Debug: Refresh Buttons';
+    refreshButton.style.cssText = `
+      background-color: ${isDarkMode ? '#ff5722' : '#ff9800'};
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 10px;
+      cursor: pointer;
+    `;
+    
+    refreshButton.addEventListener('click', () => {
+      this.debugLog('Debug refresh clicked, current selectedLength:', this.selectedLength);
+      
+      buttons.forEach(btn => {
+        const btnLength = btn.dataset.length as CommentLength;
+        const shouldBeSelected = btnLength === this.selectedLength;
+        this.debugLog(`Refreshing button "${btn.textContent}": shouldBeSelected=${shouldBeSelected}, btnLength=${btnLength}`);
+        this.applyButtonStyle(btn, shouldBeSelected, isDarkMode);
+      });
+    });
+    
+    debugButtonContainer.appendChild(refreshButton);
+    container.appendChild(debugButtonContainer);
+  }
+
+  /**
+   * Handle extension context invalidation
+   * @param commentsUI The current comments UI container
+   * @param errorMessage The error message to display
+   */
+  private handleContextInvalidation(commentsUI: HTMLElement, errorMessage: string): void {
+    this.logger.error(errorMessage);
+    
+    // Reset flags
+    this._isRegenerating = false;
+    this._pendingLengthSelection = null;
+    
+    // Show error in the UI
+    const errorContainer = document.createElement('div');
+    errorContainer.style.cssText = `
+      padding: 16px;
+      color: #d32f2f;
+      background-color: #ffebee;
+      border-radius: 4px;
+      margin: 16px 0;
+      text-align: center;
+    `;
+    
+    const errorTitle = document.createElement('div');
+    errorTitle.textContent = 'Extension Context Error';
+    errorTitle.style.cssText = `
+      font-weight: 600;
+      margin-bottom: 8px;
+    `;
+    
+    const errorText = document.createElement('div');
+    errorText.textContent = 'The extension context has been invalidated. Please refresh the page and try again.';
+    errorText.style.cssText = `
+      font-size: 14px;
+      margin-bottom: 12px;
+    `;
+    
+    const refreshButton = document.createElement('button');
+    refreshButton.textContent = 'Refresh Page';
+    refreshButton.style.cssText = `
+      background-color: #d32f2f;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    `;
+    
+    refreshButton.addEventListener('click', () => {
+      window.location.reload();
+    });
+    
+    errorContainer.appendChild(errorTitle);
+    errorContainer.appendChild(errorText);
+    errorContainer.appendChild(refreshButton);
+    
+    // Clear content and show error
+    commentsUI.innerHTML = '';
+    commentsUI.appendChild(errorContainer);
   }
 }

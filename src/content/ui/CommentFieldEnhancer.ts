@@ -1,4 +1,6 @@
 import { Logger } from '../services/Logger';
+// Import CommentLength type from CommentDisplay
+import { CommentLength } from './CommentDisplay';
 
 /**
  * CommentFieldEnhancer - Enhances LinkedIn comment fields with EngageIQ functionality
@@ -280,39 +282,21 @@ export class CommentFieldEnhancer {
   }
   
   /**
-   * Attach event listeners to the button
+   * Attach event listeners to the Generate Comment button
    */
   private attachEventListeners(button: HTMLElement, field: HTMLElement): void {
-    button.addEventListener('click', async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      // Prevent multiple clicks
-      if (this.isGenerating) {
-        this.logger.info('Generate button clicked but generation already in progress');
-        return;
-      }
-      
-      this.logger.info('Generate button clicked for field:', field.id);
-      
-      // Log button state before applying loading state
-      this.logger.info('Button pre-loading state', {
-        id: button.id,
-        display: button.style.display,
-        innerHTML: button.innerHTML.substring(0, 50) + '...',
-        childNodes: button.childNodes.length,
-        hasDiv: !!button.querySelector('div'),
-        isGenerating: this.isGenerating,
-        buttonWidth: button.offsetWidth,
-        buttonHeight: button.offsetHeight,
-        buttonVisible: button.offsetParent !== null
-      });
-      
+    button.addEventListener('click', async () => {
       // Show loading state
       this.showButtonLoadingState(button);
       
-      // Get saved length preference
-      let lengthPreference = 'medium'; // Default to medium if preference can't be retrieved
+      // First ensure we have a unique ID for the field
+      if (!field.id) {
+        field.id = `engageiq-comment-field-${Date.now()}`;
+      }
+      
+      // Get the user's saved comment length preference
+      let lengthPreference: CommentLength = 'medium'; // Default
+      
       try {
         const response = await chrome.runtime.sendMessage({ 
           type: 'GET_COMMENT_LENGTH_PREFERENCE' 
@@ -326,6 +310,11 @@ export class CommentFieldEnhancer {
         }
       } catch (error) {
         this.logger.error('Error getting length preference:', error);
+        // Check if this is a context invalidation error
+        if (error instanceof Error && error.message.includes('Extension context invalidated')) {
+          this.showContextInvalidationError(button);
+          return;
+        }
         // Reset loading state on error
         this.resetButtonLoadingState(button);
         return;
@@ -335,28 +324,130 @@ export class CommentFieldEnhancer {
       const postContent = this.extractPostContent(field);
       
       // Send message to background script to generate comment
-      chrome.runtime.sendMessage({
-        type: 'GENERATE_COMMENT',
-        payload: {
-          fieldId: field.id,
-          postContent,
-          options: {
-            tone: 'all',
-            length: lengthPreference
+      try {
+        chrome.runtime.sendMessage({
+          type: 'GENERATE_COMMENT',
+          payload: {
+            fieldId: field.id,
+            postContent,
+            options: {
+              tone: 'all',
+              length: lengthPreference
+            }
           }
-        }
-      }, (response) => {
-        this.logger.info('Generate comment response:', response);
-        
-        if (response && response.error) {
-          // Reset loading state on error
+        }, (response) => {
+          // Check for Chrome runtime errors
+          if (chrome.runtime.lastError) {
+            this.logger.error('Chrome runtime error:', chrome.runtime.lastError);
+            // Handle context invalidation error - safely check for message property
+            if (chrome.runtime.lastError && 
+                typeof chrome.runtime.lastError === 'object' && 
+                'message' in chrome.runtime.lastError && 
+                chrome.runtime.lastError.message && 
+                chrome.runtime.lastError.message.includes('Extension context invalidated')) {
+              this.showContextInvalidationError(button);
+              return;
+            }
+            // Reset loading state on other errors
+            this.resetButtonLoadingState(button);
+            return;
+          }
+          
+          this.logger.info('Generate comment response:', response);
+          
+          if (response && response.error) {
+            // Reset loading state on error
+            this.resetButtonLoadingState(button);
+          }
+          
+          // For debugging - we should now receive a COMMENT_GENERATED message from background script
+          this.logger.info('Waiting for COMMENT_GENERATED message...');
+        });
+      } catch (error) {
+        this.logger.error('Error sending message to background script:', error);
+        // Check if this is a context invalidation error
+        if (error instanceof Error && error.message.includes('Extension context invalidated')) {
+          this.showContextInvalidationError(button);
+        } else {
+          // Reset loading state on other errors
           this.resetButtonLoadingState(button);
         }
-        
-        // For debugging - we should now receive a COMMENT_GENERATED message from background script
-        this.logger.info('Waiting for COMMENT_GENERATED message...');
-      });
+      }
     });
+  }
+  
+  /**
+   * Show context invalidation error to user
+   */
+  private showContextInvalidationError(button: HTMLElement): void {
+    // Reset button first
+    this.resetButtonLoadingState(button);
+    
+    // Create error tooltip
+    const tooltip = document.createElement('div');
+    tooltip.textContent = 'Extension needs a refresh. Please reload the page.';
+    tooltip.style.cssText = `
+      position: absolute;
+      background-color: #d32f2f;
+      color: white;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      max-width: 200px;
+      z-index: 99999;
+      top: -40px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    `;
+    
+    // Add refresh button
+    const refreshButton = document.createElement('button');
+    refreshButton.textContent = 'Reload Page';
+    refreshButton.style.cssText = `
+      background-color: white;
+      color: #d32f2f;
+      border: none;
+      border-radius: 4px;
+      padding: 4px 8px;
+      margin-top: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      font-weight: bold;
+    `;
+    
+    refreshButton.addEventListener('click', () => {
+      window.location.reload();
+    });
+    
+    tooltip.appendChild(document.createElement('br'));
+    tooltip.appendChild(refreshButton);
+    
+    // Add arrow
+    const arrow = document.createElement('div');
+    arrow.style.cssText = `
+      position: absolute;
+      width: 0;
+      height: 0;
+      bottom: -6px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 6px solid #d32f2f;
+    `;
+    
+    tooltip.appendChild(arrow);
+    button.style.position = 'relative';
+    button.appendChild(tooltip);
+    
+    // Auto-remove tooltip after 10 seconds
+    setTimeout(() => {
+      if (button.contains(tooltip)) {
+        button.removeChild(tooltip);
+      }
+    }, 10000);
   }
   
   /**
