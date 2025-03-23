@@ -312,6 +312,25 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 6. Verify the redesign works in both light and dark modes
 7. Confirm all existing functionality (tone selection, length selection, comment insertion) works within new design
 
+**Next Sub-Step:** Replace the text on 'Generate Comment' button with an image.
+
+---
+
+**Sub-Step 15.3: Replace Text on 'Generate Comment' Button with Image**
+**Tasks:**
+- Extract and prepare the icon image used for the extension
+- Modify the 'Generate Comment' button to use the icon image instead of text
+- Ensure the button maintains its responsive behavior
+- Add appropriate alt text for accessibility
+
+**Verification:**
+1. Verify the button icon displays correctly and scales appropriately
+2. Test the button appearance in both light and dark modes
+3. Check that the button remains responsive and clickable
+4. Verify the icon matches the extension icon for visual consistency
+5. Test accessibility by ensuring screen readers can interpret the button's function
+6. Verify the button works correctly on different screen sizes and resolutions
+
 **Next Step:** Enhance multilingual support.
 
 ---
