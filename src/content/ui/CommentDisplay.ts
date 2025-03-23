@@ -264,15 +264,22 @@ export class CommentDisplay implements ICommentDisplay {
       return;
     }
     
+    // Hide the Generate Comment button for this field
+    const generateButton = document.querySelector(`button[data-field-id="${fieldId}"]`) as HTMLElement;
+    if (generateButton) {
+      generateButton.style.display = 'none';
+      this.logger.info('Hidden Generate Comment button while popup is open');
+    }
+    
     // Determine if we're in dark mode
     const isDarkMode = this.themeDetector.isDarkMode();
     
-    // Create the comments UI container
+    // Create the comments UI container - now wider and floating
     const commentsUI = document.createElement('div');
     commentsUI.className = 'engageiq-comments-ui';
     commentsUI.style.cssText = `
-      position: absolute;
-      width: 360px;
+      position: fixed;
+      width: 480px;
       max-width: 90vw;
       background-color: ${isDarkMode ? '#1d2226' : 'white'};
       color: ${isDarkMode ? '#f5f5f5' : '#1d2226'};
@@ -283,29 +290,77 @@ export class CommentDisplay implements ICommentDisplay {
       max-height: 80vh;
       overflow-y: auto;
       font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      transition: box-shadow 0.2s;
+      border: 1px solid ${isDarkMode ? '#3d3d3d' : '#e3e3e3'};
     `;
     
     // Position the comments UI
     const fieldRect = field.getBoundingClientRect();
-    commentsUI.style.top = `${window.scrollY + fieldRect.bottom + 8}px`;
-    commentsUI.style.left = `${window.scrollX + fieldRect.left}px`;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const popupWidth = 480; // Match width from CSS above
     
-    // Create header
+    // Calculate initial position to ensure it's visible
+    let initialTop = fieldRect.bottom + 8;
+    let initialLeft = Math.max(4, Math.min(fieldRect.left, viewportWidth - popupWidth - 4));
+    
+    // Adjust vertical position if near bottom of viewport
+    if (initialTop + 300 > viewportHeight) { // 300px is an estimated minimum height
+      initialTop = Math.max(8, viewportHeight - 300 - 8);
+    }
+    
+    // Set initial position
+    commentsUI.style.top = `${initialTop}px`;
+    commentsUI.style.left = `${initialLeft}px`;
+    
+    // Create header with drag handle styling
     const header = document.createElement('div');
     header.style.cssText = `
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 16px;
+      cursor: move;
+      padding-bottom: 8px;
+      border-bottom: 1px solid ${isDarkMode ? '#3d3d3d' : '#e3e3e3'};
     `;
     
+    // Add drag indicator to visually show it's draggable
+    const dragIndicator = document.createElement('div');
+    dragIndicator.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 2px;
+    `;
+    
+    for (let i = 0; i < 3; i++) {
+      const dot = document.createElement('div');
+      dot.style.cssText = `
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background-color: ${isDarkMode ? '#8e8e8e' : '#8e8e8e'};
+      `;
+      dragIndicator.appendChild(dot);
+    }
+    
     const title = document.createElement('h3');
-    title.textContent = 'AI Comment Suggestions';
+    // Use textContent to ensure proper text rendering
+    title.textContent = '';
+    const titleText = document.createTextNode('AI Comment Suggestions');
+    title.appendChild(titleText);
+    
     title.style.cssText = `
       margin: 0;
       font-size: 16px;
       font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     `;
+    
+    // Add the drag indicator to the title
+    title.prepend(dragIndicator);
     
     const closeButton = document.createElement('button');
     closeButton.innerHTML = '&times;';
@@ -315,12 +370,27 @@ export class CommentDisplay implements ICommentDisplay {
       font-size: 20px;
       cursor: pointer;
       color: ${isDarkMode ? '#f5f5f5' : '#1d2226'};
+      padding: 4px 8px;
     `;
-    closeButton.addEventListener('click', () => commentsUI.remove());
+    
+    // Add click handler to restore the button when closing
+    closeButton.addEventListener('click', () => {
+      // Show the Generate Comment button again
+      if (generateButton) {
+        this.restoreGenerateButton(generateButton);
+        this.logger.info('Restored Generate Comment button visibility');
+      }
+      
+      // Remove the popup
+      commentsUI.remove();
+    });
     
     header.appendChild(title);
     header.appendChild(closeButton);
     commentsUI.appendChild(header);
+    
+    // Implement drag functionality
+    this.implementDragFunctionality(header, commentsUI);
     
     // Add length preference selector
     const lengthPreferenceSection = this.createLengthPreferenceSelector(isDarkMode, fieldId, commentsUI);
@@ -343,10 +413,156 @@ export class CommentDisplay implements ICommentDisplay {
     // Add to DOM
     document.body.appendChild(commentsUI);
     
+    // Set up a MutationObserver to detect when the popup is removed from the DOM
+    // (in case it's removed by any method other than the close button)
+    const buttonRestoreObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'childList') {
+          for (const node of Array.from(mutation.removedNodes)) {
+            if (node === commentsUI || (node as Element).contains(commentsUI)) {
+              // Show the Generate Comment button again
+              if (generateButton) {
+                this.restoreGenerateButton(generateButton);
+                this.logger.info('Restored Generate Comment button on popup removal');
+              }
+              
+              // Disconnect the observer as it's no longer needed
+              buttonRestoreObserver.disconnect();
+              return;
+            }
+          }
+        }
+      }
+    });
+    
+    // Start observing the document body for removed children
+    buttonRestoreObserver.observe(document.body, { childList: true, subtree: true });
+    
+    // Visual enhancement on popup appearance
+    setTimeout(() => {
+      commentsUI.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.2)';
+    }, 50);
+    
     // Double-check button selection after rendering
     setTimeout(() => {
       this.doubleCheckButtonSelection(commentsUI);
     }, 50);
+  }
+  
+  /**
+   * Implement drag functionality for the popup
+   * @param dragHandle The element that initiates the drag action
+   * @param popupElement The popup element to be moved
+   */
+  private implementDragFunctionality(dragHandle: HTMLElement, popupElement: HTMLElement): void {
+    let isDragging = false;
+    let offsetX = 0;
+    let offsetY = 0;
+    
+    const startDrag = (e: MouseEvent) => {
+      // Only allow drag from the drag handle
+      if (e.target !== dragHandle && !dragHandle.contains(e.target as Node)) {
+        return;
+      }
+      
+      isDragging = true;
+      
+      // Change cursor during drag
+      document.body.style.cursor = 'move';
+      
+      // Highlight popup during drag
+      popupElement.style.boxShadow = '0 12px 28px rgba(0, 0, 0, 0.3)';
+      
+      // Calculate offset from mouse position to popup top-left corner
+      const popupRect = popupElement.getBoundingClientRect();
+      offsetX = e.clientX - popupRect.left;
+      offsetY = e.clientY - popupRect.top;
+      
+      // Prevent text selection during drag
+      e.preventDefault();
+    };
+    
+    const doDrag = (e: MouseEvent) => {
+      if (!isDragging) return;
+      
+      // Calculate new position
+      const newLeft = e.clientX - offsetX;
+      const newTop = e.clientY - offsetY;
+      
+      // Get viewport and popup dimensions
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const popupRect = popupElement.getBoundingClientRect();
+      const popupWidth = popupRect.width;
+      const popupHeight = popupRect.height;
+      
+      // Ensure popup stays within viewport boundaries
+      const boundedLeft = Math.max(0, Math.min(newLeft, viewportWidth - popupWidth));
+      const boundedTop = Math.max(0, Math.min(newTop, viewportHeight - popupHeight));
+      
+      // Update position
+      popupElement.style.left = `${boundedLeft}px`;
+      popupElement.style.top = `${boundedTop}px`;
+    };
+    
+    const endDrag = () => {
+      if (!isDragging) return;
+      
+      isDragging = false;
+      
+      // Reset cursor
+      document.body.style.cursor = '';
+      
+      // Reset popup shadow
+      popupElement.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.2)';
+    };
+    
+    // Add mouse event listeners
+    dragHandle.addEventListener('mousedown', startDrag);
+    document.addEventListener('mousemove', doDrag);
+    document.addEventListener('mouseup', endDrag);
+    
+    // Set up proper cleanup when the popup is closed
+    const cleanupDragListeners = () => {
+      document.removeEventListener('mousemove', doDrag);
+      document.removeEventListener('mouseup', endDrag);
+      dragHandle.removeEventListener('mousedown', startDrag);
+      window.removeEventListener('beforeunload', cleanupDragListeners);
+    };
+    
+    // Add cleanup for when popup is closed via the close button
+    const closeButton = popupElement.querySelector('button') as HTMLElement;
+    if (closeButton) {
+      const originalClickHandler = closeButton.onclick;
+      closeButton.onclick = (e) => {
+        cleanupDragListeners();
+        if (originalClickHandler) {
+          return originalClickHandler.call(closeButton, e);
+        }
+        return true;
+      };
+    }
+    
+    // Add cleanup for page navigation/refresh
+    window.addEventListener('beforeunload', cleanupDragListeners);
+    
+    // Add a global mutation observer to detect when the popup is removed from the DOM
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        if (mutation.type === 'childList') {
+          for (const node of Array.from(mutation.removedNodes)) {
+            if (node === popupElement || (node as Element).contains(popupElement)) {
+              cleanupDragListeners();
+              observer.disconnect();
+              return;
+            }
+          }
+        }
+      }
+    });
+    
+    // Observe document.body to catch any DOM changes
+    observer.observe(document.body, { childList: true, subtree: true });
   }
   
   /**
@@ -737,6 +953,15 @@ export class CommentDisplay implements ICommentDisplay {
         });
         document.dispatchEvent(insertEvent);
         
+        // Restore the Generate Comment button before closing
+        const generateButton = document.querySelector(`button[data-field-id="${fieldId}"]`) as HTMLElement;
+        if (generateButton) {
+          generateButton.style.display = 'block';
+          // Use improved tooltip reset method
+          this.resetTooltipState(generateButton);
+          this.logger.info('Restored Generate Comment button on comment insertion');
+        }
+        
         // Close the comment UI
         commentsUI.remove();
       } catch (error) {
@@ -962,5 +1187,59 @@ export class CommentDisplay implements ICommentDisplay {
    */
   private isValidLength(length: string): boolean {
     return ['very_short', 'short', 'medium', 'long', 'very_long'].includes(length);
+  }
+  
+  /**
+   * Reset tooltip state to ensure it's hidden
+   * @param button The button element containing the tooltip
+   */
+  private resetTooltipState(button: HTMLElement): void {
+    // First try to find the tooltip within any span element
+    let tooltip = button.querySelector('span') as HTMLElement;
+    
+    // If not found, look for any span within a div inside the button
+    if (!tooltip || tooltip.textContent !== 'Generate Comment') {
+      const buttonContent = button.querySelector('div');
+      if (buttonContent) {
+        tooltip = buttonContent.querySelector('span[style*="position: absolute"]') as HTMLElement;
+      }
+    }
+    
+    // If a tooltip was found, hide it
+    if (tooltip) {
+      tooltip.style.opacity = '0';
+      tooltip.style.visibility = 'hidden';
+    }
+  }
+
+  /**
+   * Restore the "Generate Comment" button when popup is closed
+   * @param button The button to restore
+   */
+  private restoreGenerateButton(button: HTMLElement): void {
+    if (!button) return;
+    
+    // Always start with display:block to ensure visibility
+    button.style.display = 'block';
+    
+    // Ensure all critical styles are set directly
+    button.style.backgroundColor = '#0a66c2';
+    button.style.color = 'white';
+    button.style.cursor = 'pointer';
+    button.style.opacity = '1';
+    button.style.zIndex = '9999';
+    button.style.position = 'absolute';
+    button.style.width = '32px';
+    button.style.height = '32px';
+    button.style.borderRadius = '50%';
+    button.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+    
+    // Reset any transform that might have been applied
+    button.style.transform = 'scale(1)';
+    
+    // Ensure tooltip is hidden
+    this.resetTooltipState(button);
+    
+    this.logger.info('Fully restored Generate Comment button');
   }
 }
