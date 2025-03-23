@@ -62,8 +62,11 @@ export class CommentDisplay implements ICommentDisplay {
    * @param comments Generated comments
    * @param fieldId ID of the comment field
    */
-  showCommentsUI(comments: any, fieldId: string): void {
+  async showCommentsUI(comments: any, fieldId: string): Promise<void> {
     this.logger.info('Showing comments UI for', { comments, fieldId });
+    
+    // Ensure we have the most recent length preference before showing UI
+    await this.loadLengthPreference();
     
     // Find the field
     const field = document.getElementById(fieldId);

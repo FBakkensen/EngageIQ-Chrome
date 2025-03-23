@@ -171,7 +171,7 @@ export class CommentFieldEnhancer {
       this.logger.info('Generate button clicked for field:', field.id);
       
       // Get saved length preference
-      let lengthPreference = null; // Don't set a default here
+      let lengthPreference = 'medium'; // Default to medium if preference can't be retrieved
       try {
         const response = await chrome.runtime.sendMessage({ 
           type: 'GET_COMMENT_LENGTH_PREFERENCE' 
@@ -180,6 +180,8 @@ export class CommentFieldEnhancer {
         if (response && response.preference) {
           lengthPreference = response.preference;
           this.logger.info('Using saved length preference:', lengthPreference);
+        } else {
+          this.logger.info('No saved preference found, using default:', lengthPreference);
         }
       } catch (error) {
         this.logger.error('Error getting length preference:', error);

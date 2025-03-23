@@ -27,8 +27,13 @@ export class MessageHandler {
         switch (message.type) {
           case 'COMMENT_GENERATED':
             console.log('⭐ MessageHandler: Received COMMENT_GENERATED message', message.payload);
-            this.handleCommentGenerated(message.payload);
-            sendResponse({ success: true });
+            // Use promise-based approach for async function
+            this.handleCommentGenerated(message.payload)
+              .then(() => sendResponse({ success: true }))
+              .catch(error => {
+                console.error('Error handling comment generation:', error);
+                sendResponse({ success: false, error: String(error) });
+              });
             break;
             
           case 'INSERT_COMMENT':
@@ -92,7 +97,7 @@ export class MessageHandler {
   /**
    * Handle generated comments
    */
-  private handleCommentGenerated(payload: { comments: EngageIQ.CommentResponse, fieldId: string }): void {
+  private async handleCommentGenerated(payload: { comments: EngageIQ.CommentResponse, fieldId: string }): Promise<void> {
     console.log('⭐ MessageHandler: Comment generated:', payload);
     
     // Check if we have comments and a field ID
@@ -102,6 +107,6 @@ export class MessageHandler {
     }
     
     // Show the comments UI
-    this.commentDisplay.showCommentsUI(payload.comments, payload.fieldId);
+    await this.commentDisplay.showCommentsUI(payload.comments, payload.fieldId);
   }
 }
