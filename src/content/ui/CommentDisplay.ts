@@ -284,14 +284,14 @@ export class CommentDisplay implements ICommentDisplay {
     commentsUI.className = 'engageiq-comments-ui';
     commentsUI.style.cssText = `
       position: fixed;
-      width: 550px;
+      width: 500px;
       max-width: 95vw;
       background-color: ${isDarkMode ? '#1d2226' : 'white'};
       color: ${isDarkMode ? '#f5f5f5' : '#1d2226'};
       border-radius: 12px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, ${isDarkMode ? '0.4' : '0.2'});
       z-index: 9999;
-      padding: 20px;
+      padding: 14px;
       max-height: 80vh;
       overflow-y: auto;
       font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
@@ -302,8 +302,8 @@ export class CommentDisplay implements ICommentDisplay {
     // Position the comments UI
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const popupWidth = 550; // Match width from CSS above
-    const popupHeight = 450; // Approximate height for calculations
+    const popupWidth = 500; // Match width from CSS above
+    const popupHeight = 420; // Approximate height for calculations
     
     // ALWAYS center the popup in the viewport - this is the most reliable approach
     const initialLeft = Math.max(0, (viewportWidth - popupWidth) / 2);
@@ -320,9 +320,9 @@ export class CommentDisplay implements ICommentDisplay {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 16px;
+      margin-bottom: 10px;
       cursor: move;
-      padding-bottom: 12px;
+      padding-bottom: 8px;
       border-bottom: 1px solid ${isDarkMode ? '#3d3d3d' : '#e3e3e3'};
     `;
     
@@ -452,7 +452,7 @@ export class CommentDisplay implements ICommentDisplay {
     
     title.style.cssText = `
       margin: 0;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 600;
       display: flex;
       align-items: center;
@@ -502,10 +502,6 @@ export class CommentDisplay implements ICommentDisplay {
     // Implement drag functionality
     this.implementDragFunctionality(header, commentsUI);
     
-    // Add length preference selector
-    const lengthPreferenceSection = this.createLengthPreferenceSelector(isDarkMode, fieldId, commentsUI);
-    commentsUI.appendChild(lengthPreferenceSection);
-    
     // Create tabbed content container
     const tabsContainer = document.createElement('div');
     tabsContainer.className = 'engageiq-tabs-container';
@@ -516,7 +512,7 @@ export class CommentDisplay implements ICommentDisplay {
     tabsNav.style.cssText = `
       display: flex;
       border-bottom: 1px solid ${isDarkMode ? '#3d3d3d' : '#e3e3e3'};
-      margin-bottom: 16px;
+      margin-bottom: 12px;
       overflow-x: auto;
       scrollbar-width: none; /* Firefox */
     `;
@@ -548,18 +544,20 @@ export class CommentDisplay implements ICommentDisplay {
       tabButton.className = index === activeTab ? 'active' : '';
       tabButton.style.cssText = `
         padding: 10px 16px;
-        background: none;
+        background: ${index === activeTab ? 
+          (isDarkMode ? 'rgba(0, 115, 177, 0.15)' : 'rgba(10, 102, 194, 0.08)') : 'none'};
         border: none;
         border-bottom: 3px solid ${index === activeTab ? 
           (isDarkMode ? '#0073b1' : '#0a66c2') : 'transparent'};
         color: ${index === activeTab ? 
           (isDarkMode ? '#f5f5f5' : '#0a66c2') : 
           (isDarkMode ? '#a5a5a5' : '#666')};
-        font-weight: ${index === activeTab ? '600' : '400'};
+        font-weight: ${index === activeTab ? '600' : '500'};
         cursor: pointer;
         transition: all 0.2s;
         white-space: nowrap;
         flex-shrink: 0;
+        border-radius: 4px 4px 0 0;
       `;
       
       // Tab button hover effect
@@ -567,6 +565,7 @@ export class CommentDisplay implements ICommentDisplay {
         if (tabButton.className !== 'active') {
           tabButton.style.color = isDarkMode ? '#d0d0d0' : '#0a66c2';
           tabButton.style.borderBottomColor = isDarkMode ? 'rgba(0, 115, 177, 0.3)' : 'rgba(10, 102, 194, 0.3)';
+          tabButton.style.background = isDarkMode ? 'rgba(0, 115, 177, 0.08)' : 'rgba(10, 102, 194, 0.04)';
         }
       });
       
@@ -574,6 +573,7 @@ export class CommentDisplay implements ICommentDisplay {
         if (tabButton.className !== 'active') {
           tabButton.style.color = isDarkMode ? '#a5a5a5' : '#666';
           tabButton.style.borderBottomColor = 'transparent';
+          tabButton.style.background = 'none';
         }
       });
       
@@ -606,24 +606,33 @@ export class CommentDisplay implements ICommentDisplay {
       
       tabsNav.appendChild(tabButton);
       
-      // Create tab content
+      // Create a tab pane for this tone
       const tabPane = document.createElement('div');
       tabPane.dataset.tab = index.toString();
       tabPane.style.cssText = `
         display: ${index === activeTab ? 'block' : 'none'};
+        margin-bottom: 8px;
       `;
       
-      // Create comment card for this tone
-      const commentText = document.createElement('div');
-      commentText.textContent = comments[tone];
+      // Create text area with the comment for this tone
+      const commentText = document.createElement('textarea');
+      commentText.value = comments[tone];
       commentText.style.cssText = `
-        font-size: 15px;
+        width: 100%;
+        min-height: 120px;
+        max-height: 220px;
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 6px;
+        border: 1px solid ${isDarkMode ? '#424242' : '#e0e0e0'};
+        background-color: ${isDarkMode ? '#283339' : '#f9f9f9'};
+        color: ${isDarkMode ? '#f5f5f5' : '#1d2226'};
+        font-family: -apple-system, system-ui, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+        font-size: 13px;
         line-height: 1.5;
-        margin-bottom: 16px;
-        white-space: pre-wrap;
-        padding: 12px;
-        border-radius: 8px;
-        background-color: ${isDarkMode ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)'};
+        resize: vertical;
+        outline: none;
+        transition: border-color 0.2s;
       `;
       
       // Button container
@@ -632,7 +641,7 @@ export class CommentDisplay implements ICommentDisplay {
         display: flex;
         justify-content: space-between;
         gap: 12px;
-        margin-top: 16px;
+        margin-top: 10px;
       `;
       
       // Copy button
@@ -724,17 +733,33 @@ export class CommentDisplay implements ICommentDisplay {
         }
       });
       
+      // Create keyboard shortcut hint
+      const keyboardHint = document.createElement('div');
+      keyboardHint.style.cssText = `
+        font-size: 11px;
+        color: ${isDarkMode ? '#a0a0a0' : '#888'};
+        text-align: right;
+        margin-top: 5px;
+      `;
+      keyboardHint.textContent = 'Tip: Use left/right arrows to switch, Ctrl+Enter to use comment';
+      
       buttonContainer.appendChild(copyButton);
       buttonContainer.appendChild(useButton);
       
       tabPane.appendChild(commentText);
       tabPane.appendChild(buttonContainer);
+      tabPane.appendChild(keyboardHint);
+      
       tabContent.appendChild(tabPane);
     });
     
     tabsContainer.appendChild(tabsNav);
     tabsContainer.appendChild(tabContent);
     commentsUI.appendChild(tabsContainer);
+    
+    // Add length preference selector
+    const lengthPreferenceSection = this.createLengthPreferenceSelector(isDarkMode, fieldId, commentsUI);
+    commentsUI.appendChild(lengthPreferenceSection);
     
     // Add keyboard handling
     this.setupKeyboardNavigationForTabs(commentsUI, tones.length);
@@ -1134,9 +1159,18 @@ export class CommentDisplay implements ICommentDisplay {
   private createLengthPreferenceSelector(isDarkMode: boolean, fieldId: string, commentsUI: HTMLElement): HTMLElement {
     const container = document.createElement('div');
     container.style.cssText = `
-      margin-bottom: 16px;
-      padding-bottom: 12px;
+      margin-bottom: 8px;
+      padding-bottom: 8px;
       border-bottom: 1px solid ${isDarkMode ? '#424242' : '#e0e0e0'};
+    `;
+    
+    // Create a flex container for label and save button
+    const headerRow = document.createElement('div');
+    headerRow.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
     `;
     
     // Label
@@ -1145,10 +1179,37 @@ export class CommentDisplay implements ICommentDisplay {
     label.style.cssText = `
       font-size: 13px;
       font-weight: 500;
-      margin-bottom: 8px;
       color: ${isDarkMode ? '#dfdfdf' : '#666'};
     `;
-    container.appendChild(label);
+    headerRow.appendChild(label);
+    
+    // Save as Default button (moved to header row)
+    const saveDefaultButton = document.createElement('button');
+    saveDefaultButton.textContent = 'Save as Default';
+    saveDefaultButton.style.cssText = `
+      background-color: transparent;
+      border: 1px solid ${isDarkMode ? '#0073b1' : '#0a66c2'};
+      color: ${isDarkMode ? '#0073b1' : '#0a66c2'};
+      border-radius: 16px;
+      padding: 3px 8px;
+      font-size: 11px;
+      cursor: pointer;
+    `;
+    
+    saveDefaultButton.addEventListener('click', () => {
+      // Save the current temporary preference as the permanent one
+      this.saveLengthPreference(this.selectedLength);
+      
+      // Show feedback
+      const originalText = saveDefaultButton.textContent;
+      saveDefaultButton.textContent = 'Saved!';
+      setTimeout(() => {
+        saveDefaultButton.textContent = originalText;
+      }, 2000);
+    });
+    
+    headerRow.appendChild(saveDefaultButton);
+    container.appendChild(headerRow);
     
     // Add a debug section if in debug mode
     if (this._debugMode) {
@@ -1178,41 +1239,6 @@ export class CommentDisplay implements ICommentDisplay {
     if (this._debugMode) {
       this.addDebugRefreshButton(container, buttons, isDarkMode);
     }
-    
-    // Add Save as Default button
-    const saveDefaultSection = document.createElement('div');
-    saveDefaultSection.style.cssText = `
-      display: flex;
-      justify-content: flex-end;
-      margin-top: 8px;
-    `;
-    
-    const saveDefaultButton = document.createElement('button');
-    saveDefaultButton.textContent = 'Save as Default';
-    saveDefaultButton.style.cssText = `
-      background-color: transparent;
-      border: 1px solid ${isDarkMode ? '#0073b1' : '#0a66c2'};
-      color: ${isDarkMode ? '#0073b1' : '#0a66c2'};
-      border-radius: 16px;
-      padding: 4px 10px;
-      font-size: 11px;
-      cursor: pointer;
-    `;
-    
-    saveDefaultButton.addEventListener('click', () => {
-      // Save the current temporary preference as the permanent one
-      this.saveLengthPreference(this.selectedLength);
-      
-      // Show feedback
-      const originalText = saveDefaultButton.textContent;
-      saveDefaultButton.textContent = 'Saved!';
-      setTimeout(() => {
-        saveDefaultButton.textContent = originalText;
-      }, 2000);
-    });
-    
-    saveDefaultSection.appendChild(saveDefaultButton);
-    container.appendChild(saveDefaultSection);
     
     return container;
   }
@@ -1257,7 +1283,8 @@ export class CommentDisplay implements ICommentDisplay {
    * Format tone name for display
    */
   private formatToneName(tone: string): string {
-    return tone.charAt(0).toUpperCase() + tone.slice(1) + ' tone';
+    // Make tone name more concise by removing the word "tone"
+    return tone.charAt(0).toUpperCase() + tone.slice(1);
   }
   
   /**
