@@ -14,7 +14,7 @@ export type CommentLength = 'very_short' | 'short' | 'medium' | 'long' | 'very_l
 export class CommentDisplay implements ICommentDisplay {
   private logger: Logger;
   private themeDetector: ThemeDetector;
-  private selectedLength: CommentLength = 'medium'; // Default length
+  private selectedLength: CommentLength = 'medium'; // Use medium as initialization value
   
   constructor() {
     this.logger = new Logger('CommentDisplay');

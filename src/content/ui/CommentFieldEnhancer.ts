@@ -171,7 +171,7 @@ export class CommentFieldEnhancer {
       this.logger.info('Generate button clicked for field:', field.id);
       
       // Get saved length preference
-      let lengthPreference = 'medium'; // Default
+      let lengthPreference = null; // Don't set a default here
       try {
         const response = await chrome.runtime.sendMessage({ 
           type: 'GET_COMMENT_LENGTH_PREFERENCE' 
