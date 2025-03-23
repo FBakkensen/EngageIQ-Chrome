@@ -273,11 +273,50 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 2. Verify compatibility with different LinkedIn post types and content.
 3. Check for any performance issues or UI glitches.
 
-**Next Step:** Add multilingual support.
+**Next Step:** Implement UI/UX improvements.
 
 ---
 
-### Step 15: Enhance Multilingual Support
+### Step 15: Implement UI/UX Improvements
+
+**Sub-Step 15.1: Add Loading Spinner for Comment Generation**
+**Tasks:**
+- Design and implement a loading spinner for the "Generate Comment" button
+- Ensure consistent visual feedback with the existing "Regenerate Comment" loading state
+- Handle state transitions (idle, loading, complete, error)
+
+**Verification:**
+1. Click the "Generate Comment" button and verify the spinner appears immediately
+2. Confirm the spinner visually indicates activity during API calls
+3. Test with different network speeds to ensure consistent behavior
+4. Verify spinner design is consistent with LinkedIn's design language
+5. Check spinner behavior in both light and dark modes
+
+**Next Sub-Step:** Implement floating popup redesign.
+
+---
+
+**Sub-Step 15.2: Redesign Comment Display as Movable Floating Popup**
+**Tasks:**
+- Redesign the comment display UI as a floating popup that utilizes more screen width
+- Implement drag-and-drop functionality to allow users to reposition the popup
+- Ensure the popup respects screen boundaries and maintains visibility
+- Update styling to match LinkedIn's design language
+
+**Verification:**
+1. Generate a comment and verify the new floating popup design appears
+2. Test dragging the popup to different screen positions
+3. Verify the popup remains within screen boundaries when dragged
+4. Check that the wider design effectively utilizes available screen space
+5. Test responsiveness on different screen sizes
+6. Verify the redesign works in both light and dark modes
+7. Confirm all existing functionality (tone selection, length selection, comment insertion) works within new design
+
+**Next Step:** Enhance multilingual support.
+
+---
+
+### Step 16: Enhance Multilingual Support
 **Tasks:**
 - Improve language detection in post extraction
 - Update prompt engineering for language matching
@@ -292,7 +331,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-### Step 16: Add Image Content Processing
+### Step 17: Add Image Content Processing
 **Tasks:**
 - Enhance post extraction to handle images
 - Update API integration for image processing
@@ -309,7 +348,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ## Phase 4: Robustness & Polish
 
-### Step 17: Enhance Error Handling
+### Step 18: Enhance Error Handling
 **Tasks:**
 - Implement comprehensive error handling
 - Add user-friendly error messages
@@ -324,7 +363,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-### Step 18: Implement Performance Optimizations
+### Step 19: Implement Performance Optimizations
 **Tasks:**
 - Add debouncing for event listeners
 - Optimize DOM operations
@@ -339,7 +378,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-### Step 19: Add Visual Polish and Feedback
+### Step 20: Add Visual Polish and Feedback
 **Tasks:**
 - Refine UI animations and transitions
 - Add loading indicators
@@ -354,7 +393,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-### Step 20: Prepare for Future Enhancements
+### Step 21: Prepare for Future Enhancements
 **Tasks:**
 - Refactor code for modularity
 - Add extension points for future features
@@ -369,7 +408,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-### Step 21: Finalize and Package
+### Step 22: Finalize and Package
 **Tasks:**
 - Perform end-to-end testing
 - Optimize bundle size
