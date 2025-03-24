@@ -25,4 +25,27 @@ module.exports = {
       setupFilesAfterEnv: ['<rootDir>/tests/setup-node.js'],
     },
   ],
+  // Coverage collection configuration
+  collectCoverage: true,
+  collectCoverageFrom: [
+    'src/**/*.{ts,tsx}',
+    '!src/**/*.d.ts',
+    '!src/**/*.{spec,test}.{ts,tsx}',
+    '!src/**/*.stories.{ts,tsx}',
+    '!src/index.ts',
+    '!src/background.ts'
+  ],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov'],
+  coverageThreshold: {
+    global: {
+      statements: 70,
+      branches: 70,
+      functions: 70,
+      lines: 70
+    }
+  },
+  // Test reporting configuration
+  testTimeout: 10000,
+  verbose: true
 }; 
