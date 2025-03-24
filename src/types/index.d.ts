@@ -49,6 +49,37 @@ declare namespace EngageIQ {
   }
 
   /**
+   * Image type information for content analysis
+   */
+  interface ImageTypeInfo {
+    url: string;
+    type: ImageType;
+    confidence: number; // 0-1 confidence score
+    primaryColors?: string[]; // Potential future enhancement
+    dimensions?: {
+      width: number;
+      height: number;
+    };
+  }
+
+  /**
+   * Image types for specialized prompt generation
+   */
+  type ImageType = 
+    | 'profile_photo'   // Profile/headshot of a person
+    | 'product'         // Product image
+    | 'chart'           // Chart, graph, or data visualization
+    | 'infographic'     // Complex information graphic
+    | 'screenshot'      // Screenshot of software, website, etc.
+    | 'document'        // Document, presentation slide, etc.
+    | 'text_image'      // Image containing significant text
+    | 'event'           // Event-related image (conference, meetup)
+    | 'team'            // Group of people/team photo
+    | 'location'        // Place, office, or geographic location
+    | 'generic'         // General purpose image
+    | 'unknown';        // Unable to determine type
+
+  /**
    * Generated comment response
    */
   interface CommentResponse {

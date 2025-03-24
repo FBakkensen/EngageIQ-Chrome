@@ -10,6 +10,59 @@ export class CommentGenerationService {
   // Cache for processed images to avoid redundant processing
   private static imageCache = new Map<string, {data: string, mimeType: string, timestamp: number}>();
 
+  // Patterns for image type detection
+  private static readonly IMAGE_TYPE_PATTERNS = {
+    profile_photo: [
+      /profile/i, /headshot/i, /avatar/i, /portrait/i, /linkedin.*profile/i,
+      /user-photo/i, /user_image/i, /person/i, /face/i
+    ],
+    product: [
+      /product/i, /item/i, /merch/i, /goods/i, /device/i, /gadget/i
+    ],
+    chart: [
+      /chart/i, /graph/i, /plot/i, /diagram/i, /analytics/i, /data[-_]?viz/i,
+      /figure/i, /stats/i, /metrics/i
+    ],
+    infographic: [
+      /infographic/i, /info[-_]?graphic/i, /visual[-_]?summary/i
+    ],
+    screenshot: [
+      /screenshot/i, /screen[-_]?shot/i, /screen[-_]?grab/i, /capture/i
+    ],
+    document: [
+      /document/i, /doc/i, /pdf/i, /slide/i, /presentation/i, /report/i,
+      /page/i, /resume/i, /cv/i
+    ],
+    text_image: [
+      /quote/i, /text[-_]?image/i, /meme/i, /saying/i, /excerpt/i
+    ],
+    event: [
+      /event/i, /conference/i, /meetup/i, /meeting/i, /seminar/i,
+      /workshop/i, /gathering/i, /webinar/i
+    ],
+    team: [
+      /team/i, /group/i, /staff/i, /employees/i, /colleagues/i, /crew/i,
+      /members/i, /partners/i
+    ],
+    location: [
+      /location/i, /place/i, /site/i, /venue/i, /office/i, /building/i,
+      /headquarters/i, /hq/i, /campus/i
+    ]
+  };
+
+  // Post type to likely image type mappings
+  private static readonly POST_TYPE_IMAGE_MAPPINGS: Record<string, EngageIQ.ImageType[]> = {
+    'text': ['generic'],
+    'image': ['generic', 'product', 'infographic', 'location', 'event'],
+    'article': ['text_image', 'chart', 'infographic'],
+    'video': ['screenshot'],
+    'poll': ['chart', 'text_image'],
+    'document': ['document', 'chart', 'text_image'],
+    'job': ['location', 'team', 'profile_photo'],
+    'event': ['event', 'location'],
+    'share': ['generic']
+  };
+
   /**
    * Generates comments for a LinkedIn post
    */
@@ -588,6 +641,275 @@ export class CommentGenerationService {
   }
 
   /**
+   * Detects the likely types of images based on URL patterns and post context
+   * @param images Array of image URLs
+   * @param postType Type of the post containing the images
+   * @param postText Text content of the post
+   * @returns Array of ImageTypeInfo objects with detected types and confidence
+   */
+  private static detectImageTypes(
+    images: string[],
+    postType: string = 'generic',
+    postText: string = ''
+  ): EngageIQ.ImageTypeInfo[] {
+    if (!images || images.length === 0) return [];
+
+    const results: EngageIQ.ImageTypeInfo[] = [];
+    const normalizedPostText = postText.toLowerCase();
+    
+    // Post text content hints for image type detection
+    const textHints: Record<EngageIQ.ImageType, RegExp[]> = {
+      'profile_photo': [/new team member/i, /welcome/i, /joined/i, /hire/i, /proud to announce/i],
+      'product': [/product/i, /launch/i, /introducing/i, /new release/i, /check out/i, /announcement/i],
+      'chart': [/data/i, /report/i, /growth/i, /increase/i, /metrics/i, /trends/i, /analysis/i],
+      'infographic': [/infographic/i, /breakdown/i, /steps/i, /process/i, /how to/i],
+      'screenshot': [/screenshot/i, /look at/i, /interface/i, /platform/i, /software/i, /app/i],
+      'document': [/document/i, /white paper/i, /case study/i, /report/i, /study/i, /research/i],
+      'text_image': [/quote/i, /saying/i, /thought/i, /message/i],
+      'event': [/event/i, /conference/i, /meetup/i, /webinar/i, /session/i, /speaking/i, /panel/i],
+      'team': [/team/i, /colleagues/i, /group/i, /department/i, /together/i],
+      'location': [/office/i, /headquarters/i, /location/i, /where/i, /visit/i, /space/i],
+      'generic': [],
+      'unknown': []
+    };
+    
+    for (const imageUrl of images) {
+      // Start with default values
+      let detectedType: EngageIQ.ImageType = 'generic';
+      let confidence = 0.5; // Default confidence
+      
+      // Check URL patterns for type hints
+      for (const [type, patterns] of Object.entries(this.IMAGE_TYPE_PATTERNS)) {
+        for (const pattern of patterns) {
+          if (pattern.test(imageUrl)) {
+            detectedType = type as EngageIQ.ImageType;
+            confidence = 0.7; // URL pattern match has good confidence
+            break;
+          }
+        }
+      }
+      
+      // Use post type to refine detection
+      const likelyTypesForPost = this.POST_TYPE_IMAGE_MAPPINGS[postType] || ['generic'];
+      if (likelyTypesForPost.includes(detectedType)) {
+        confidence += 0.1; // Increase confidence if detected type matches post type expectations
+      } else if (likelyTypesForPost[0] !== 'generic' && detectedType === 'generic') {
+        // If we only detected generic but post type suggests specific type, use that
+        detectedType = likelyTypesForPost[0];
+        confidence = 0.6; // Moderate confidence based on post type
+      }
+      
+      // Check text content for additional clues
+      for (const [type, patterns] of Object.entries(textHints)) {
+        for (const pattern of patterns) {
+          if (pattern.test(normalizedPostText)) {
+            // If text hints match the already detected type, increase confidence
+            if (type === detectedType) {
+              confidence = Math.min(confidence + 0.2, 0.95); // Cap at 0.95
+              break;
+            } 
+            // If text strongly suggests a different type, consider changing type
+            else if (confidence < 0.7) {
+              detectedType = type as EngageIQ.ImageType;
+              confidence = 0.65; // Moderate confidence from text hint
+              break;
+            }
+          }
+        }
+      }
+      
+      // Dimensions info would be available in a full implementation
+      // For now, use placeholder
+      results.push({
+        url: imageUrl,
+        type: detectedType,
+        confidence
+      });
+    }
+    
+    return results;
+  }
+
+  /**
+   * Creates specialized prompt segments for different image types
+   * @param imageTypeInfo Array of detected image types
+   * @param tone Comment tone to generate
+   * @returns Specialized prompt segment for the detected image types
+   */
+  private static createImageTypePrompts(
+    imageTypeInfo: EngageIQ.ImageTypeInfo[],
+    tone: string
+  ): string {
+    if (!imageTypeInfo || imageTypeInfo.length === 0) {
+      return '';
+    }
+    
+    // Group images by type
+    const typeGroups = new Map<EngageIQ.ImageType, EngageIQ.ImageTypeInfo[]>();
+    for (const info of imageTypeInfo) {
+      if (!typeGroups.has(info.type)) {
+        typeGroups.set(info.type, []);
+      }
+      typeGroups.get(info.type)!.push(info);
+    }
+    
+    let result = '';
+    
+    // Generate specialized guidance for each image type
+    for (const [type, images] of typeGroups.entries()) {
+      const imageCount = images.length;
+      const imageWord = imageCount === 1 ? 'image' : 'images';
+      const highConfidence = images.some(img => img.confidence > 0.7);
+      
+      // Only include specialized prompts if we have reasonable confidence
+      if (!highConfidence && type !== 'generic') {
+        continue;
+      }
+      
+      switch (type) {
+        case 'profile_photo':
+          result += `
+The post contains ${imageCount} profile photo${imageCount > 1 ? 's' : ''}. When mentioning the person:
+- Focus on professional achievements and expertise rather than appearance
+- Acknowledge their role or contribution if mentioned in the post
+- If appropriate, express professional admiration or congratulations
+- Maintain a respectful and professional tone
+- ${tone === 'curious' ? 'Consider asking about their professional journey or experiences' : ''}
+- ${tone === 'insightful' ? 'Consider mentioning relevance to industry trends or best practices' : ''}`;
+          break;
+          
+        case 'product':
+          result += `
+The post features ${imageCount} product ${imageWord}. When referencing the product:
+- Acknowledge the innovation or value proposition if apparent
+- ${tone === 'supportive' ? 'Express enthusiasm about the product\'s potential benefits' : ''}
+- ${tone === 'curious' ? 'Ask thoughtful questions about functionality or use cases' : ''}
+- ${tone === 'insightful' ? 'Relate to industry trends or market needs if relevant' : ''}
+- ${tone === 'professional' ? 'Discuss potential business applications or professional relevance' : ''}
+- Avoid generic praise; be specific about what aspects are noteworthy`;
+          break;
+          
+        case 'chart':
+          result += `
+The post contains ${imageCount} chart/data visualization ${imageWord}:
+- Reference specific insights or trends shown if you can discern them
+- ${tone === 'insightful' ? 'Offer additional context or implications of the data' : ''}
+- ${tone === 'curious' ? 'Ask about specific aspects of the data or methodology' : ''}
+- ${tone === 'supportive' ? 'Acknowledge the value of the insights shared' : ''}
+- ${tone === 'professional' ? 'Connect the data to business outcomes or industry benchmarks' : ''}
+- If specific metrics are visible, reference them naturally in your comment`;
+          break;
+          
+        case 'infographic':
+          result += `
+The post includes ${imageCount} infographic ${imageWord}:
+- Reference the main topic or theme of the infographic
+- ${tone === 'insightful' ? 'Expand on one of the key points with your own expertise' : ''}
+- ${tone === 'curious' ? 'Ask about specific elements or request elaboration on a point' : ''}
+- ${tone === 'supportive' ? 'Appreciate the clarity or usefulness of the information presented' : ''}
+- ${tone === 'professional' ? 'Discuss practical applications or business relevance of the information' : ''}
+- If steps or processes are shown, acknowledge their practical value`;
+          break;
+          
+        case 'screenshot':
+          result += `
+The post contains ${imageCount} screenshot ${imageWord}:
+- Comment on the functionality or design elements visible if relevant
+- ${tone === 'supportive' ? 'Acknowledge improvements or innovative features shown' : ''}
+- ${tone === 'curious' ? 'Ask about specific features or use cases visible in the screenshot' : ''}
+- ${tone === 'insightful' ? 'Connect what you see to broader industry trends or best practices' : ''}
+- ${tone === 'professional' ? 'Comment on business applications or professional relevance' : ''}
+- If it's a user interface, mention its intuitive design or functionality if apparent`;
+          break;
+          
+        case 'document':
+          result += `
+The post features ${imageCount} document/presentation ${imageWord}:
+- Reference the document\'s topic or key points if visible
+- ${tone === 'supportive' ? 'Acknowledge the value of the information shared' : ''}
+- ${tone === 'curious' ? 'Ask about specific sections or findings in the document' : ''}
+- ${tone === 'insightful' ? 'Connect the document\'s content to related industry knowledge' : ''}
+- ${tone === 'professional' ? 'Discuss practical applications or business implications' : ''}
+- If it\'s a formal publication, acknowledge the research or expertise demonstrated`;
+          break;
+          
+        case 'text_image':
+          result += `
+The post contains ${imageCount} text-based ${imageWord} (quotes, text graphics):
+- Reference the message or quote directly if you can discern it
+- ${tone === 'supportive' ? 'Affirm the sentiment or message expressed' : ''}
+- ${tone === 'curious' ? 'Ask about the context or inspiration behind the quote/message' : ''}
+- ${tone === 'insightful' ? 'Connect the message to broader principles or experiences' : ''}
+- ${tone === 'professional' ? 'Relate the message to professional contexts or business wisdom' : ''}
+- If it\'s an inspirational quote, acknowledge how it relates to professional growth`;
+          break;
+          
+        case 'event':
+          result += `
+The post features ${imageCount} event-related ${imageWord}:
+- Reference the type of event or its purpose if apparent
+- ${tone === 'supportive' ? 'Express enthusiasm about the event or its outcomes' : ''}
+- ${tone === 'curious' ? 'Ask about key takeaways or future similar events' : ''}
+- ${tone === 'insightful' ? 'Connect the event to industry trends or professional development' : ''}
+- ${tone === 'professional' ? 'Discuss business relevance or networking opportunities at such events' : ''}
+- If it\'s a speaking engagement, acknowledge the value of knowledge sharing`;
+          break;
+          
+        case 'team':
+          result += `
+The post shows ${imageCount} team or group photo ${imageWord}:
+- Acknowledge the collaborative aspect or team achievement
+- ${tone === 'supportive' ? 'Celebrate the team spirit or accomplishment shown' : ''}
+- ${tone === 'curious' ? 'Ask about the team\'s project or collaboration process' : ''}
+- ${tone === 'insightful' ? 'Comment on the value of diverse teams or effective collaboration' : ''}
+- ${tone === 'professional' ? 'Note how team dynamics contribute to professional success' : ''}
+- Focus on the professional context rather than individuals\' appearances`;
+          break;
+          
+        case 'location':
+          result += `
+The post features ${imageCount} location or office ${imageWord}:
+- Reference the location or environment if identifiable
+- ${tone === 'supportive' ? 'Comment positively on the workspace or environment shown' : ''}
+- ${tone === 'curious' ? 'Ask about the location or how it relates to their work' : ''}
+- ${tone === 'insightful' ? 'Connect location aspects to productivity or work culture' : ''}
+- ${tone === 'professional' ? 'Note how the environment might support professional goals' : ''}
+- If it\'s a new office, acknowledge the milestone or company growth`;
+          break;
+          
+        case 'generic':
+        case 'unknown':
+        default:
+          // Only add generic guidance if we don't have other specialized types
+          if (typeGroups.size === 1) {
+            result += `
+For the ${imageCount} ${imageWord} in this post:
+- Comment on relevant visual elements that support the post's message
+- ${tone === 'supportive' ? 'Acknowledge how the visual content enhances the message' : ''}
+- ${tone === 'curious' ? 'Ask about aspects of the visual content that pique your interest' : ''}
+- ${tone === 'insightful' ? 'Connect what you see to relevant professional contexts' : ''}
+- ${tone === 'professional' ? 'Focus on business relevance or professional aspects shown' : ''}
+- Integrate observations naturally without explicitly describing the images`;
+          }
+          break;
+      }
+    }
+    
+    // Add guidance for multiple image types if applicable
+    if (typeGroups.size > 1) {
+      result += `
+
+When addressing multiple types of visual content:
+- Prioritize the most relevant image type for your comment's focus
+- Create a coherent narrative that ties different visual elements together
+- Don't try to reference every image; focus on those most relevant to your point
+- Maintain a natural flow rather than commenting on each image separately`;
+    }
+    
+    return result;
+  }
+
+  /**
    * Creates a prompt for the Gemini API based on post content and options
    */
   private static createPrompt(
@@ -605,12 +927,21 @@ export class CommentGenerationService {
       const imageCount = postContent.images.length;
       const imageWord = imageCount === 1 ? 'image' : 'images';
       
+      // Detect image types for specialized prompting
+      const imageTypeInfo = this.detectImageTypes(
+        postContent.images,
+        postContent.postType,
+        postContent.text
+      );
+      
+      // Basic image context
       imageContext = `The post includes ${imageCount} ${imageWord}. `;
       
       if (postContent.postType === 'image') {
         imageContext += `This is primarily an image-focused post. Please analyze the visual content carefully. `;
       }
       
+      // Add general image analysis guidance
       imageContext += `When analyzing the ${imageWord}, consider:
 - The main subject(s) or focal point(s)
 - Any text visible in the ${imageWord}
@@ -619,6 +950,25 @@ export class CommentGenerationService {
 - Emotional tone conveyed by the ${imageWord}
 
 Incorporate your observations about the ${imageWord} naturally into your comment when relevant. You don't need to describe the ${imageWord} explicitly unless it adds value to your comment. Focus on connecting the visual content to your main points.`;
+
+      // Add specialized prompts based on detected image types
+      const specializedPrompts = this.createImageTypePrompts(imageTypeInfo, options.tone);
+      if (specializedPrompts) {
+        imageContext += `\n\n${specializedPrompts}`;
+      }
+      
+      // Add fallback strategy guidance for uncertain image types
+      const uncertainTypes = imageTypeInfo.filter(info => info.confidence < 0.6);
+      if (uncertainTypes.length > 0) {
+        imageContext += `\n
+Since some image content may be ambiguous:
+- Focus primarily on the text content of the post
+- Reference visual elements only when you can confidently discern their nature
+- Avoid making assumptions about what the images specifically show
+- Keep image references general rather than specific
+- Emphasize the overall theme or message rather than specific visual details`;
+      }
+      
     } else {
       imageContext = 'The post does not include any images.';
     }

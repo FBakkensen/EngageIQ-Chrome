@@ -18,12 +18,13 @@
   - Floating popup with drag-and-drop functionality
   - Icon-based buttons for cleaner interface
   - Enhanced comment formatting for better readability
+- Image content processing functionality:
+  - Image detection and extraction from LinkedIn posts
+  - API integration for image processing
+  - Advanced prompt engineering for different image types
 
 ## What's Left to Build
 - Image content processing functionality (Step 17)
-  - Image detection and extraction
-  - API integration for image processing
-  - Prompt engineering for image context
   - UI updates for image processing
 - Enhanced error handling with user-friendly messages (Step 18)
 - Performance optimizations for smoother experience (Step 19)
