@@ -69,24 +69,37 @@ The EngageIQ Chrome extension follows a modular architecture with clear separati
   - LogService provides consistent logging throughout the extension
 
 ## Planned Refactoring
-The codebase is scheduled for refactoring according to SOLID principles to improve maintainability and extensibility:
+The codebase has been analyzed for refactoring according to SOLID principles to improve maintainability and extensibility. The service analysis and planning phase has been completed, and the following refactoring tasks have been identified:
 
 - **Single Responsibility Principle**: Refactoring services to have a single, well-defined responsibility
-  - Breaking down CommentGenerationService into specialized services
-  - Creating dedicated services for prompt generation, image processing, and comment formatting
+  - Breaking down CommentGenerationService into specialized services:
+    - IPromptGenerationService: Responsible for creating prompts based on post content
+    - IGeminiApiService: Handles communication with Gemini AI API
+    - ICommentFormattingService: Formats and structures generated comments
+    - IImageProcessingService: Processes images for AI analysis
 
 - **Open/Closed Principle**: Making services extensible without modification
   - Defining clear interfaces for all services
   - Using dependency injection to allow for different implementations
+  - Creating a pluggable architecture for new features
 
 - **Liskov Substitution Principle**: Ensuring implementations are substitutable for their interfaces
   - Creating proper inheritance hierarchies for services
   - Ensuring child classes respect the contracts of parent classes
+  - Implementing thorough test cases to verify substitutability
 
 - **Interface Segregation**: Creating focused interfaces rather than general-purpose ones
   - Breaking down large interfaces into smaller, more specific ones
   - Ensuring components only depend on interfaces they actually use
+  - Analyzing and refactoring existing interfaces for better focus
 
 - **Dependency Inversion**: Making high-level modules depend on abstractions
   - Enhancing ServiceFactory to better manage dependencies
   - Implementing proper lifecycle management for services
+  - Moving from direct service instantiation to dependency injection
+
+The next steps in the refactoring process include:
+1. Establishing comprehensive test infrastructure to ensure refactoring preserves behavior
+2. Enhancing the ServiceFactory for better dependency management
+3. Refactoring the CommentGenerationService into specialized components
+4. Refactoring UI components that contain business logic
