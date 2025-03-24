@@ -359,9 +359,113 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-### ✅ Step 17: Add Image Content Processing
+### ✅ Step 17: Implement Code Refactoring According to SOLID Principles
 
-**✅ Sub-Step 17.1: Image Detection and Extraction**
+**Tasks:**
+- Analyze existing services for adherence to SOLID principles
+- Create comprehensive test coverage before refactoring
+- Refactor services one at a time with focus on maintainability and extensibility
+
+**✅ Sub-Step 17.1: Service Analysis and Planning**
+**Tasks:**
+- Create a service inventory documenting all services, responsibilities, and dependencies
+- Identify services that violate SOLID principles (particularly Single Responsibility)
+- Map service relationships and coupling points
+- Prioritize services for refactoring based on size, complexity, and dependencies
+- Create a detailed refactoring roadmap with milestones
+
+**Verification:**
+1. Verify completeness of service inventory against codebase
+2. Confirm comprehensive documentation of current architecture strengths and weaknesses
+3. Check that refactoring priorities align with the extension's core functionality
+4. Review the refactoring roadmap for feasibility and risk assessment
+
+**Next Sub-Step:** Establish test infrastructure before refactoring.
+
+---
+
+**❌ Sub-Step 17.2: Establish Test Infrastructure**
+**Tasks:**
+- Implement unit testing framework for services
+- Create mocks for external dependencies (Chrome API, Gemini API)
+- Set up integration tests for service interactions
+- Add end-to-end tests for critical user flows
+- Establish test coverage baselines
+
+**Verification:**
+1. Run unit tests for critical services to verify functionality
+2. Check test coverage meets minimum threshold (e.g., 80%)
+3. Verify mocks properly simulate external dependencies
+4. Confirm integration tests validate service interactions
+5. Test that E2E tests capture main user workflows
+
+**Next Sub-Step:** Refactor core services.
+
+---
+
+**❌ Sub-Step 17.3: Refactor Core Services**
+**Tasks:**
+- Refactor CommentGenerationService into smaller, focused services:
+  - Create PromptGenerationService for handling prompt creation
+  - Create ImageProcessingService for image handling
+  - Create GeminiAPIService for API communication
+  - Create CommentFormattingService for output formatting
+- Update service factory to provide new service implementations
+- Ensure backward compatibility with existing code
+- Update documentation to reflect new service architecture
+
+**Verification:**
+1. Run tests to verify refactored services maintain same behavior
+2. Check that refactored code follows Single Responsibility Principle
+3. Verify services use dependency injection for testability
+4. Confirm that client code continues to function with new services
+5. Test performance to ensure refactoring doesn't introduce overhead
+
+**Next Sub-Step:** Refactor UI components.
+
+---
+
+**❌ Sub-Step 17.4: Refactor UI Components**
+**Tasks:**
+- Extract business logic from UI components (CommentFieldEnhancer, CommentDisplay)
+- Create dedicated service for post content extraction
+- Break down large UI components into smaller, focused components
+- Implement proper dependency injection for UI components
+- Ensure clear separation between UI and business logic
+
+**Verification:**
+1. Test UI components with mock services to verify functionality
+2. Check UI rendering in different contexts (light/dark mode, various layouts)
+3. Verify event handling works correctly after refactoring
+4. Test performance of UI components after refactoring
+5. Confirm UI behavior matches pre-refactoring baseline
+
+**Next Sub-Step:** Enhance dependency management.
+
+---
+
+**❌ Sub-Step 17.5: Enhance Dependency Management**
+**Tasks:**
+- Update ServiceFactory to support lazy initialization of services
+- Implement proper lifecycle management for services
+- Add capability to register custom service implementations
+- Support testing mode with mock services
+- Create interfaces for all services that lack them
+
+**Verification:**
+1. Verify all services are properly accessed through ServiceFactory
+2. Test custom service implementation registration
+3. Check lazy loading behavior improves performance
+4. Confirm mock services can be substituted for testing
+5. Test service lifecycle management (creation, caching, disposal)
+
+**Next Step:** Add image content processing
+
+---
+
+### ❌ Step 18: Add Image Content Processing
+
+**❌ Sub-Step 18.1: Image Detection and Extraction**
 **Tasks:**
 - Enhance the post content extraction logic to identify image elements in LinkedIn posts
 - Implement methods to extract image URLs or base64 data from post DOM
@@ -381,7 +485,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-**✅ Sub-Step 17.2: API Integration for Image Processing**
+**✅ Sub-Step 18.2: API Integration for Image Processing**
 **Tasks:**
 - Update the Gemini API service to handle image data in requests
 - Implement request formatting for multimodal inputs (text + images)
@@ -402,7 +506,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-**✅ Sub-Step 17.3: Prompt Engineering for Image Context**
+**✅ Sub-Step 18.3: Prompt Engineering for Image Context**
 **Tasks:**
 - Modify prompt templates to incorporate image context information
 - Create specialized prompts for different image types (product images, people, infographics, etc.)
@@ -422,7 +526,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-**❌ Sub-Step 17.4: UI Updates and Testing for Image Processing**
+**❌ Sub-Step 18.4: UI Updates and Testing for Image Processing**
 **Tasks:**
 - Update the comment generation UI to indicate when image content is being processed
 - Add visual cues that show which images are being included in the analysis
@@ -446,7 +550,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ## Phase 4: Robustness & Polish
 
-### ❌ Step 18: Enhance Error Handling
+### ❌ Step 19: Enhance Error Handling
 **Tasks:**
 - Implement comprehensive error handling
 - Add user-friendly error messages
@@ -461,7 +565,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-### ❌ Step 19: Implement Performance Optimizations
+### ❌ Step 20: Implement Performance Optimizations
 **Tasks:**
 - Add debouncing for event listeners
 - Optimize DOM operations
@@ -476,7 +580,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 ---
 
-### ❌ Step 20: Add Visual Polish and Feedback
+### ❌ Step 21: Add Visual Polish and Feedback
 **Tasks:**
 - Refine UI animations and transitions
 - Add loading indicators
@@ -487,11 +591,11 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 2. Check loading indicators during API calls
 3. Verify visual feedback for successful/failed actions
 
-**Next Step:** Add extensibility for future features
+**Next Step:** Prepare for future enhancements
 
 ---
 
-### ❌ Step 21: Prepare for Future Enhancements
+### ❌ Step 22: Prepare for Future Enhancements
 **Tasks:**
 - Refactor code for modularity
 - Add extension points for future features
@@ -502,11 +606,11 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 2. Verify documentation is comprehensive
 3. Test that existing functionality works with refactored code
 
-**Next Step:** Final testing and packaging
+**Next Step:** Finalize and package
 
 ---
 
-### ❌ Step 22: Finalize and Package
+### ❌ Step 23: Finalize and Package
 **Tasks:**
 - Perform end-to-end testing
 - Optimize bundle size
