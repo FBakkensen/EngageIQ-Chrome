@@ -1,29 +1,32 @@
 # Product Context
 
 ## Why This Project Exists
-EngageIQ exists to enhance online engagement by providing a consistent commenting experience across different websites. Many websites either lack native commenting systems or have cumbersome implementations that discourage user participation. This extension aims to solve that problem by providing a unified, user-friendly commenting interface.
+EngageIQ exists to enhance professional networking on LinkedIn by providing AI-powered comment generation capabilities. Many professionals struggle to craft engaging, relevant comments on LinkedIn posts, leading to missed networking opportunities. This extension aims to solve that problem by providing intelligent comment suggestions that match the context of LinkedIn posts.
 
 ## Problems It Solves
-- Lack of native commenting systems on many websites
-- Inconsistent commenting experiences across different platforms
-- Poor user interfaces that discourage engagement
-- Limited functionality in existing commenting systems
-- Absence of theme support for different viewing preferences
-- Difficulty in tracking discussions across multiple sites
+- Difficulty crafting engaging professional comments on LinkedIn
+- Time-consuming process of writing thoughtful responses
+- Inconsistent comment quality across different post types
+- Language barriers for non-native speakers
+- Challenges in maintaining appropriate professional tone
+- Limited understanding of what drives engagement on LinkedIn
 
 ## How It Should Work
-1. The extension should automatically detect content posts/articles on web pages
-2. It should inject a comment section at an appropriate location (typically at the bottom of content)
-3. Users should be able to read existing comments and add their own
-4. Comments should be stored locally and possibly synced with a backend
-5. The UI should adapt to the website's theme (light/dark mode)
-6. The extension should be configurable through an options page
+1. The extension detects LinkedIn posts and comment fields
+2. It adds a "Generate Comment" button next to comment fields
+3. When clicked, the extension analyzes the post content (text and images)
+4. It generates multiple comment suggestions with different tones (Professional, Casual, Enthusiastic)
+5. Users can select their preferred comment length (Short, Medium, Long)
+6. Users can select a suggestion to automatically insert it into the comment field
+7. The UI adapts to LinkedIn's theme (light/dark mode)
+8. User preferences are saved for future use
 
 ## User Experience Goals
-- Seamless integration with existing websites
-- Intuitive, clean interface that encourages participation
-- Consistent experience across different websites
-- Responsive design that works on various screen sizes
-- Appropriate themes that match user preferences
-- Minimal performance impact on website loading and interaction
-- Easy configuration options for users to customize their experience
+- Seamless integration with LinkedIn's existing interface
+- Intuitive, clean UI that complements LinkedIn's design
+- Fast and responsive comment generation
+- High-quality, contextually relevant comment suggestions
+- Appropriate tone options for different professional scenarios
+- Customizable comment length to match user preferences
+- Minimal performance impact on LinkedIn browsing experience
+- Privacy-focused design that respects user data

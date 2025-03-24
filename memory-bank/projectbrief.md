@@ -1,15 +1,19 @@
 # Project Brief
 
 ## Project Goals
-The main goal of this project is to create a Chrome extension called EngageIQ that enhances commenting functionality on web pages. The extension aims to provide a seamless and intuitive way for users to engage with content across various websites by automatically injecting a comment section where appropriate.
+The main goal of this project is to create a Chrome extension called EngageIQ that enhances LinkedIn commenting capabilities through AI-powered comment generation. The extension aims to help professionals craft engaging, contextually relevant comments on LinkedIn posts with minimal effort, improving their networking experience and professional engagement.
 
 ## Core Requirements
-- Detect appropriate content posts/articles on web pages
-- Inject a customized comment field into web pages
-- Display existing comments with proper formatting and threading
-- Store comments locally and potentially sync with a backend service
-- Support different themes (light/dark mode)
-- Provide a user-friendly options page for configuration
-- Ensure the extension works across a wide variety of websites
-- Implement robust error handling and logging
-- Use modern React components with TypeScript for maintainability
+- Detect LinkedIn posts and comment fields accurately
+- Provide a user-friendly button for generating AI comments
+- Extract post content, including text and images where possible
+- Generate high-quality, contextually relevant comment suggestions
+- Offer multiple tone options (Professional, Casual, Enthusiastic)
+- Support different comment lengths (Short, Medium, Long)
+- Seamlessly insert selected comments into LinkedIn's editor
+- Adapt to LinkedIn's UI themes (light/dark mode)
+- Store user preferences securely
+- Provide a clean options page for API key configuration
+- Ensure minimal performance impact on LinkedIn browsing
+- Implement robust error handling and recovery mechanisms
+- Use TypeScript and React for maintainable, modern development
