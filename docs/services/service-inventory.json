@@ -1,0 +1,138 @@
+{
+  "metaData": {
+    "version": "1.0",
+    "lastUpdated": "2023-12-14",
+    "refactoringPhase": "analysis"
+  },
+  "services": [
+    {
+      "id": "apikey-service",
+      "name": "ApiKeyService",
+      "type": "background",
+      "path": "src/core/services/ApiKeyService.ts",
+      "hasInterface": false,
+      "interfacePath": "",
+      "responsibilities": [
+        "Manage API key storage",
+        "Validate API key with Gemini API",
+        "Provide API key to other services"
+      ],
+      "dependencies": [],
+      "solidViolations": [
+        {
+          "principle": "SRP",
+          "description": "Handles both storage and validation of API keys",
+          "severity": "medium",
+          "codeSnippet": "To be added after detailed analysis"
+        },
+        {
+          "principle": "DIP",
+          "description": "No interface for API key management",
+          "severity": "medium",
+          "codeSnippet": "To be added after detailed analysis"
+        }
+      ],
+      "metrics": {
+        "lineCount": 121,
+        "methodCount": 5,
+        "complexityScore": 3.0
+      },
+      "refactoringPlan": {
+        "priority": "high",
+        "recommendations": [
+          "Create IApiKeyService interface",
+          "Split into ApiKeyStorageService and ApiKeyValidationService",
+          "Add proper error handling"
+        ],
+        "estimatedEffort": "medium",
+        "dependencies": []
+      }
+    },
+    {
+      "id": "comment-generation-service",
+      "name": "CommentGenerationService",
+      "type": "background",
+      "path": "src/core/services/CommentGenerationService.ts",
+      "hasInterface": false,
+      "interfacePath": "",
+      "responsibilities": [
+        "Generate comment prompts",
+        "Communicate with Gemini API",
+        "Process API responses",
+        "Format comments for display"
+      ],
+      "dependencies": [
+        {
+          "service": "apikey-service",
+          "type": "direct",
+          "required": true
+        }
+      ],
+      "solidViolations": [
+        {
+          "principle": "SRP",
+          "description": "Handles multiple responsibilities (prompt generation, API communication, response formatting)",
+          "severity": "high",
+          "codeSnippet": "To be added after detailed analysis"
+        },
+        {
+          "principle": "OCP",
+          "description": "Not easily extensible for new AI models or prompt strategies",
+          "severity": "high",
+          "codeSnippet": "To be added after detailed analysis"
+        },
+        {
+          "principle": "DIP",
+          "description": "Directly depends on concrete implementations",
+          "severity": "high",
+          "codeSnippet": "To be added after detailed analysis"
+        }
+      ],
+      "metrics": {
+        "lineCount": 1466,
+        "methodCount": 30,
+        "complexityScore": 8.5
+      },
+      "refactoringPlan": {
+        "priority": "high",
+        "recommendations": [
+          "Split into PromptGenerationService, GeminiApiService, and CommentFormattingService",
+          "Create interfaces for each new service",
+          "Implement proper dependency injection",
+          "Add unit tests for each service"
+        ],
+        "estimatedEffort": "high",
+        "dependencies": []
+      }
+    }
+  ],
+  "refactorings": [
+    {
+      "id": "split-comment-generation",
+      "name": "Split CommentGenerationService",
+      "services": ["comment-generation-service"],
+      "description": "Split the monolithic CommentGenerationService into smaller, focused services",
+      "steps": [
+        "Create interfaces for new services",
+        "Implement PromptGenerationService",
+        "Implement GeminiApiService",
+        "Implement CommentFormattingService",
+        "Update service factory"
+      ],
+      "status": "planned"
+    },
+    {
+      "id": "create-api-key-interface",
+      "name": "Create ApiKeyService Interface",
+      "services": ["apikey-service"],
+      "description": "Create interface for ApiKeyService and refactor for single responsibility",
+      "steps": [
+        "Define IApiKeyService interface",
+        "Refactor ApiKeyService to implement interface",
+        "Update service factory",
+        "Add unit tests"
+      ],
+      "status": "planned"
+    }
+  ]
+} 
