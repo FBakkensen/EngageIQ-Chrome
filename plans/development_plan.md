@@ -460,18 +460,137 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 ---
 
 **❌ Sub-Step 17.2.5: Write Initial Tests for Priority Services**
+
+**❌ Sub-Step 17.2.5.1: ServiceFactory Tests**
 **Tasks:**
-- Implement tests for ServiceFactory
-- Create basic tests for CommentGenerationService
-- Add tests for ApiKeyService
-- Set up tests for MessageHandler
-- Write simple tests for UI components
+- Create test suite for the ServiceFactory singleton
+- Implement tests for service retrieval and initialization
+- Test error handling for service access patterns
 
 **Verification:**
-1. Tests run successfully for all implemented services
-2. Tests cover basic functionality of each service
-3. Tests are well-organized and follow testing best practices
-4. All critical functionality has at least one test case
+1. Test that getInstance() returns the same instance when called multiple times
+2. Verify that getters return the expected service instances
+3. Confirm proper initialization sequence of dependent services
+4. Validate error handling for unavailable services
+
+**Next Sub-Step:** ApiKeyService Tests
+
+---
+
+**❌ Sub-Step 17.2.5.2: ApiKeyService Tests**
+**Tasks:**
+- Set up test fixtures for simulated Chrome storage
+- Create tests for API key storage operations (get, save, clear)
+- Implement tests for API key validation logic
+- Test error handling pathways
+
+**Verification:**
+1. Verify API key is correctly saved to mocked storage
+2. Confirm API key retrieval functions correctly
+3. Test that validation properly handles valid/invalid keys
+4. Validate error handling for storage failures and API failures
+
+**Next Sub-Step:** MessageHandler Tests
+
+---
+
+**❌ Sub-Step 17.2.5.3: MessageHandler Tests**
+**Tasks:**
+- Create mock implementations for dependencies (CommentInserter, PostDetector)
+- Set up test fixtures for Chrome runtime messages
+- Implement tests for message processing logic
+- Test service coordination and event handling
+
+**Verification:**
+1. Verify correct message handling for different message types
+2. Confirm proper coordination with dependent services
+3. Test error propagation and handling
+4. Validate event sequence during normal operation
+
+**Next Sub-Step:** CommentGenerationService Core Tests
+
+---
+
+**❌ Sub-Step 17.2.5.4: CommentGenerationService Core Tests**
+**Tasks:**
+- Set up test fixtures for post content and API responses
+- Create tests for prompt generation functionality
+- Implement tests for basic comment generation flow
+- Test core error handling
+
+**Verification:**
+1. Verify prompts are correctly generated for different post types
+2. Confirm proper API request formatting
+3. Test response parsing logic
+4. Validate error handling for API failures
+
+**Next Sub-Step:** CommentGenerationService Advanced Tests
+
+---
+
+**❌ Sub-Step 17.2.5.5: CommentGenerationService Advanced Tests**
+**Tasks:**
+- Create tests for comment style variations
+- Implement tests for length customization
+- Test formatting and structure application
+- Create tests for edge cases and special content
+
+**Verification:**
+1. Verify different comment styles are correctly generated
+2. Confirm length customization behaves as expected
+3. Test formatting is correctly applied to generated comments
+4. Validate handling of special characters and content types
+
+**Next Sub-Step:** UI Component Core Tests
+
+---
+
+**❌ Sub-Step 17.2.5.6: UI Component Core Tests**
+**Tasks:**
+- Set up JSDOM environment for UI testing
+- Create tests for CommentDisplay rendering
+- Implement tests for CommentFieldEnhancer
+- Test basic UI state management
+
+**Verification:**
+1. Verify components render correctly with expected DOM structure
+2. Confirm theme-awareness functions properly
+3. Test UI state management for loading/error states
+4. Validate event handler setup
+
+**Next Sub-Step:** UI Component Interaction Tests
+
+---
+
+**❌ Sub-Step 17.2.5.7: UI Component Interaction Tests**
+**Tasks:**
+- Create tests for user interactions (clicks, drags, etc.)
+- Implement tests for style and length selection
+- Test comment insertion flow
+- Create tests for UI positioning logic
+
+**Verification:**
+1. Verify click handlers function correctly
+2. Confirm selection state changes appropriately
+3. Test insertion triggers the correct service calls
+4. Validate positioning behavior in different scenarios
+
+**Next Sub-Step:** Test Coverage Analysis
+
+---
+
+**❌ Sub-Step 17.2.5.8: Test Coverage Analysis**
+**Tasks:**
+- Configure Jest for coverage reporting
+- Run tests with coverage enabled
+- Identify coverage gaps
+- Create plan for addressing critical gaps
+
+**Verification:**
+1. Verify coverage report generation works correctly
+2. Confirm coverage meets minimum threshold (70%)
+3. Identify any critical functionality without coverage
+4. Validate test suite organization and structure
 
 **Next Sub-Step:** Configure test coverage reporting.
 
