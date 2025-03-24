@@ -385,20 +385,111 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 ---
 
 **❌ Sub-Step 17.2: Establish Test Infrastructure**
+
+**❌ Sub-Step 17.2.1: Set up Jest Configuration**
 **Tasks:**
-- Set up Jest configuration for unit testing services
-- Create test directory structure (src/__tests__ or tests/)
-- Implement mock framework for Chrome API (using jest.mock)
-- Create Gemini API mocks for testing API integration
-- Develop test utilities for common testing patterns
-- Establish test coverage baseline and reporting
-- Add initial tests for highest priority services (CommentGenerationService, ServiceFactory)
+- Create jest.config.js in the project root
+- Configure TypeScript support with ts-jest
+- Set up module mapping for import aliases (@/ prefix)
+- Configure test environment (jsdom for UI components, node for services)
+- Configure Jest to handle Chrome API mocking
+- Add test matching patterns
 
 **Verification:**
-1. Confirm Jest runs and reports test results correctly
-2. Verify mocks properly simulate Chrome and Gemini APIs
-3. Ensure test coverage meets minimum threshold (70%)
-4. Confirm tests properly validate current behavior of services
+1. Running `npm test` executes tests without configuration errors
+2. TypeScript files are properly transpiled during testing
+3. Import aliases work correctly in test files
+4. Jest can find and run test files according to the configured patterns
+
+**Next Sub-Step:** Create test directory structure.
+
+---
+
+**❌ Sub-Step 17.2.2: Create Test Directory Structure**
+**Tasks:**
+- Create a tests/ directory at the project root
+- Set up subdirectories mirroring the src/ structure
+- Create mocks/ directory for mock implementations
+- Set up utilities/ directory for test helpers
+- Add README.md with testing guidelines
+
+**Verification:**
+1. Directory structure is properly set up and matches src/ structure
+2. Test files can be placed in the appropriate directories
+3. Structure supports both unit and integration tests
+4. Mock and utility directories are properly organized
+
+**Next Sub-Step:** Implement mock frameworks.
+
+---
+
+**❌ Sub-Step 17.2.3: Implement Mock Frameworks**
+**Tasks:**
+- Create Chrome API mocks for common extension APIs (storage, runtime, tabs)
+- Create Gemini API mocks with sample responses for different prompts
+- Set up DOM mocks for LinkedIn page structure
+- Create mock implementation for fetch/API calls
+- Implement mock ServiceFactory for testing
+
+**Verification:**
+1. Chrome API mocks correctly simulate Chrome extension behavior
+2. Chrome storage APIs work with in-memory implementation
+3. Gemini API mocks return realistic responses
+4. Mock implementations can be easily used in test files
+
+**Next Sub-Step:** Develop test utilities.
+
+---
+
+**❌ Sub-Step 17.2.4: Develop Test Utilities**
+**Tasks:**
+- Create service factory testing utilities
+- Implement UI component testing helpers
+- Set up async testing utilities
+- Create test data generators
+- Add helper functions for common testing patterns
+
+**Verification:**
+1. Helper functions simplify common testing tasks
+2. ServiceFactory testing utilities allow easy service mocking
+3. UI component testing helpers properly render components
+4. Async utilities correctly handle promises and timers
+
+**Next Sub-Step:** Write initial tests for priority services.
+
+---
+
+**❌ Sub-Step 17.2.5: Write Initial Tests for Priority Services**
+**Tasks:**
+- Implement tests for ServiceFactory
+- Create basic tests for CommentGenerationService
+- Add tests for ApiKeyService
+- Set up tests for MessageHandler
+- Write simple tests for UI components
+
+**Verification:**
+1. Tests run successfully for all implemented services
+2. Tests cover basic functionality of each service
+3. Tests are well-organized and follow testing best practices
+4. All critical functionality has at least one test case
+
+**Next Sub-Step:** Configure test coverage reporting.
+
+---
+
+**❌ Sub-Step 17.2.6: Configure Test Coverage Reporting**
+**Tasks:**
+- Set up Jest coverage configuration
+- Define coverage thresholds (aim for 70% minimum)
+- Create npm scripts for coverage reporting
+- Set up CI integration for test reports (if CI is used)
+- Add coverage reports to .gitignore
+
+**Verification:**
+1. Running coverage command generates a coverage report
+2. Coverage report shows percentage for statements, branches, functions, and lines
+3. Coverage thresholds are properly configured
+4. Coverage reports are generated in a useful format (HTML, JSON, etc.)
 
 **Next Sub-Step:** Enhance ServiceFactory for better dependency management.
 
