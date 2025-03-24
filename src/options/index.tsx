@@ -74,7 +74,7 @@ const OptionsPage: React.FC = () => {
    */
   const fetchLengthPreference = async () => {
     try {
-      chrome.storage.sync.get('commentLengthPreference', (result) => {
+      chrome.storage.sync.get('commentLengthPreference', (result: { commentLengthPreference?: string }) => {
         const lastError = chrome.runtime.lastError;
         if (lastError) {
           return;

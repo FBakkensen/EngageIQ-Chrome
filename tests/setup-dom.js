@@ -1,0 +1,56 @@
+// tests/setup-dom.js
+// Setup for DOM testing environment
+
+// Import testing-library Jest DOM extensions
+require('@testing-library/jest-dom');
+
+// Import Chrome API mocks
+require('./setup-chrome');
+
+// Set up DOM-specific mocks
+global.MutationObserver = class {
+  constructor(callback) {
+    this.callback = callback;
+    this.observe = jest.fn();
+    this.disconnect = jest.fn();
+    this.takeRecords = jest.fn();
+  }
+};
+
+// LinkedIn-specific DOM mocks
+global.linkedInMocks = {
+  createPostElement: () => {
+    const postElement = document.createElement('div');
+    postElement.classList.add('feed-shared-update-v2');
+    postElement.setAttribute('data-id', 'mock-post-id');
+    return postElement;
+  },
+  createCommentField: () => {
+    const commentField = document.createElement('div');
+    commentField.classList.add('comments-comment-box');
+    const textarea = document.createElement('div');
+    textarea.classList.add('ql-editor');
+    commentField.appendChild(textarea);
+    return commentField;
+  }
+};
+
+// Make sure jest-dom matchers are available in tests
+expect.extend({
+  toBeInTheDocument(received) {
+    const pass = received !== null && received !== undefined;
+    return {
+      pass,
+      message: () => pass 
+        ? `Expected ${received} not to be in the document` 
+        : `Expected ${received} to be in the document`
+    };
+  }
+});
+
+// Clean up all mocks after each test
+afterEach(() => {
+  if (global.resetChromeMocks) {
+    global.resetChromeMocks();
+  }
+}); 
