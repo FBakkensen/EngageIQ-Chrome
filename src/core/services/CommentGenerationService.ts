@@ -6,6 +6,9 @@ import { ApiKeyService } from './ApiKeyService';
 export class CommentGenerationService {
   // Gemini API URL for API calls
   private static readonly API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+  
+  // Cache for processed images to avoid redundant processing
+  private static imageCache = new Map<string, {data: string, mimeType: string, timestamp: number}>();
 
   /**
    * Generates comments for a LinkedIn post
@@ -47,6 +50,230 @@ export class CommentGenerationService {
       console.error('Error generating comments:', error);
       throw error;
     }
+  }
+
+  /**
+   * Process image for Gemini API
+   * @param imageUrl URL of the image to process
+   * @param maxWidth Maximum width to resize image to
+   * @returns Object with mimeType and base64 data or null if processing fails
+   */
+  private static async processImageForAPI(imageUrl: string, maxWidth = 800): Promise<{mimeType: string, data: string} | null> {
+    try {
+      // Check cache first (with 10-minute expiration)
+      const cacheKey = `${imageUrl}_${maxWidth}`;
+      const now = Date.now();
+      const cachedImage = this.imageCache.get(cacheKey);
+      
+      if (cachedImage && (now - cachedImage.timestamp < 600000)) {
+        console.log('Using cached image data');
+        return { mimeType: cachedImage.mimeType, data: cachedImage.data };
+      }
+      
+      // Validate URL format before fetching
+      try {
+        new URL(imageUrl);
+      } catch (urlError) {
+        console.error('Invalid image URL format:', imageUrl);
+        return null;
+      }
+      
+      // Set timeout for fetch operations
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        console.error('Image fetch timed out after 5 seconds:', imageUrl);
+      }, 5000);
+      
+      // Fetch the image
+      console.log(`Fetching image: ${imageUrl}`);
+      let response;
+      try {
+        response = await fetch(imageUrl, { 
+          signal: controller.signal,
+          credentials: 'omit' // Avoid sending cookies with cross-origin requests
+        });
+        clearTimeout(timeoutId);
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
+          console.error('Image fetch aborted (timeout):', imageUrl);
+        } else {
+          console.error('Network error fetching image:', fetchError);
+        }
+        return null;
+      }
+      
+      if (!response.ok) {
+        console.error(`Failed to fetch image: ${response.status} ${response.statusText} for URL: ${imageUrl}`);
+        return null;
+      }
+      
+      // Check content type header to verify it's an image
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.startsWith('image/')) {
+        console.error(`Resource is not an image (Content-Type: ${contentType || 'unknown'}) for URL: ${imageUrl}`);
+        return null;
+      }
+      
+      // Get image as blob
+      let blob;
+      try {
+        blob = await response.blob();
+      } catch (blobError) {
+        console.error('Error converting response to blob:', blobError);
+        return null;
+      }
+      
+      // Validate mime type
+      if (!blob.type.startsWith('image/')) {
+        console.error(`Invalid image type: ${blob.type} for URL: ${imageUrl}`);
+        return null;
+      }
+      
+      // Verify blob size is reasonable (not too small or empty)
+      if (blob.size < 100) {
+        console.error(`Image size too small (${blob.size} bytes) for URL: ${imageUrl}`);
+        return null;
+      }
+      
+      // Resize the image if it's too large
+      let finalBlob = blob;
+      let resized = false;
+      
+      // Resize if over 4MB or if we need to enforce maxWidth
+      if (blob.size > 4 * 1024 * 1024 || maxWidth > 0) {
+        try {
+          finalBlob = await this.resizeImage(blob, maxWidth);
+          resized = true;
+          console.log(`Resized image from ${Math.round(blob.size / 1024)}KB to ${Math.round(finalBlob.size / 1024)}KB`);
+        } catch (resizeError) {
+          console.warn(`Image resize failed, using original: ${resizeError}`);
+          // Continue with original blob if resize fails
+        }
+      }
+      
+      // Convert blob to base64
+      let base64;
+      try {
+        base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error('FileReader failed'));
+          reader.readAsDataURL(finalBlob);
+        });
+      } catch (readerError) {
+        console.error('Error reading image data:', readerError);
+        return null;
+      }
+      
+      // Validate base64 output
+      if (!base64 || base64.length < 100) {
+        console.error('Invalid base64 conversion result');
+        return null;
+      }
+      
+      // Extract actual base64 data (remove data URL prefix)
+      const base64Data = base64.split(',')[1];
+      
+      if (!base64Data) {
+        console.error('Failed to extract base64 data');
+        return null;
+      }
+      
+      // Cache result
+      const result = {
+        mimeType: finalBlob.type,
+        data: base64Data
+      };
+      
+      this.imageCache.set(cacheKey, { 
+        ...result, 
+        timestamp: now 
+      });
+      
+      console.log(`Successfully processed image: ${imageUrl} (${finalBlob.type}, ${Math.round(finalBlob.size / 1024)}KB)${resized ? ' (resized)' : ''}`);
+      
+      // Limit cache size
+      if (this.imageCache.size > 50) {
+        // Remove oldest entries
+        const entries = Array.from(this.imageCache.entries());
+        entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+        
+        // Remove 10 oldest entries
+        for (let i = 0; i < 10 && i < entries.length; i++) {
+          this.imageCache.delete(entries[i][0]);
+        }
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Unexpected error processing image:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * Resizes an image to the specified maximum width while maintaining aspect ratio
+   * @param blob Image blob to resize
+   * @param maxWidth Maximum width in pixels
+   * @returns Resized image blob
+   */
+  private static async resizeImage(blob: Blob, maxWidth: number): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        // Calculate new dimensions maintaining aspect ratio
+        let width = img.width;
+        let height = img.height;
+        
+        if (maxWidth > 0 && width > maxWidth) {
+          const ratio = maxWidth / width;
+          width = maxWidth;
+          height = Math.round(height * ratio);
+        }
+        
+        // If image is already smaller than maxWidth, return original
+        if (width === img.width && height === img.height && blob.size <= 4 * 1024 * 1024) {
+          resolve(blob);
+          return;
+        }
+        
+        // Create canvas to resize the image
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw resized image
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convert canvas to blob
+        canvas.toBlob(
+          (newBlob) => {
+            if (newBlob) {
+              resolve(newBlob);
+            } else {
+              reject(new Error('Canvas to Blob conversion failed'));
+            }
+          },
+          blob.type,
+          0.85 // Quality parameter for compression
+        );
+      };
+      
+      img.onerror = () => {
+        reject(new Error('Image loading failed'));
+      };
+      
+      // Load the image from blob
+      img.src = URL.createObjectURL(blob);
+    });
   }
 
   /**
@@ -94,6 +321,39 @@ export class CommentGenerationService {
                          options.length === 'medium' ? 500 :
                          options.length === 'long' ? 800 : 1100;
         
+        // Create parts array starting with text prompt
+        const parts: any[] = [{ text: tonePrompt }];
+        
+        // Process images if available (limited to 5 max)
+        if (postContent.images && postContent.images.length > 0) {
+          console.log(`Processing ${Math.min(postContent.images.length, 5)} images for comment generation`);
+          
+          // Track image processing statistics
+          let successfulImages = 0;
+          
+          // Limit to 5 images maximum to avoid excessive API usage
+          const imagesToProcess = postContent.images.slice(0, 5);
+          
+          // Process each image
+          for (const imageUrl of imagesToProcess) {
+            try {
+              const processedImage = await this.processImageForAPI(imageUrl);
+              if (processedImage) {
+                parts.push({
+                  inlineData: processedImage
+                });
+                successfulImages++;
+              }
+            } catch (imageError) {
+              console.error(`Error processing image ${imageUrl}:`, imageError);
+              // Continue with other images
+            }
+          }
+          
+          console.log(`Successfully processed ${successfulImages}/${imagesToProcess.length} images`);
+        }
+        
+        // Make API request with text and image parts
         const response = await fetch(`${this.API_URL}?key=${apiKey}`, {
           method: 'POST',
           headers: {
@@ -102,9 +362,7 @@ export class CommentGenerationService {
           body: JSON.stringify({
             contents: [
               {
-                parts: [
-                  { text: tonePrompt }
-                ]
+                parts: parts
               }
             ],
             generationConfig: {
@@ -143,7 +401,28 @@ export class CommentGenerationService {
         }
       } catch (error) {
         console.error(`Error generating ${tone} comment:`, error);
-        // Provide a fallback comment for this tone
+        
+        // Check if error is related to image processing
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const isImageError = errorMessage.includes('image') || 
+                           errorMessage.includes('multimodal') || 
+                           errorMessage.includes('binary data');
+        
+        if (isImageError) {
+          console.log('Attempting fallback without image data...');
+          try {
+            // Try again without images
+            const fallbackComment = await this.generateCommentWithoutImages(postContent, toneOptions, apiKey);
+            if (fallbackComment) {
+              comments[tone] = fallbackComment;
+              continue;
+            }
+          } catch (fallbackError) {
+            console.error('Fallback without images also failed:', fallbackError);
+          }
+        }
+        
+        // Provide a fallback comment
         comments[tone] = this.generateFallbackComment(tone, postLanguage);
       }
       
@@ -160,6 +439,80 @@ export class CommentGenerationService {
     };
   }
   
+  /**
+   * Fallback method to generate a comment without including images
+   */
+  private static async generateCommentWithoutImages(
+    postContent: EngageIQ.PostContent,
+    options: EngageIQ.CommentOptions,
+    apiKey: string
+  ): Promise<string | null> {
+    try {
+      // Create a deep copy of post content without images
+      const postContentWithoutImages = {
+        ...postContent,
+        images: undefined
+      };
+      
+      // Create prompt
+      const tonePrompt = this.createPrompt(postContentWithoutImages, options);
+      
+      // API request configuration
+      const temperature = options.length === 'very_short' ? 0.6 : 
+                         options.length === 'short' ? 0.65 :
+                         options.length === 'medium' ? 0.7 :
+                         options.length === 'long' ? 0.75 : 0.8;
+                         
+      const maxTokens = options.length === 'very_short' ? 150 : 
+                       options.length === 'short' ? 300 :
+                       options.length === 'medium' ? 500 :
+                       options.length === 'long' ? 800 : 1100;
+      
+      // Make text-only API request
+      const response = await fetch(`${this.API_URL}?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                { text: tonePrompt }
+              ]
+            }
+          ],
+          generationConfig: {
+            temperature: temperature,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: maxTokens,
+            stopSequences: []
+          }
+        })
+      });
+      
+      if (!response.ok) {
+        return null;
+      }
+      
+      const data = await response.json();
+      if (data.candidates && data.candidates.length > 0 && 
+          data.candidates[0].content && data.candidates[0].content.parts && 
+          data.candidates[0].content.parts.length > 0) {
+        // Process the response
+        let commentText = data.candidates[0].content.parts[0].text.trim();
+        commentText = commentText.replace(/^["']|["']$/g, '');
+        commentText = this.applyCommentFormatting(commentText, options.tone, options.length);
+        return commentText;
+      }
+    } catch (error) {
+      console.error('Error in fallback comment generation:', error);
+    }
+    
+    return null;
+  }
+
   /**
    * Simple language detection based on character patterns
    * In a production setting, consider using a more robust language detection library
@@ -246,10 +599,29 @@ export class CommentGenerationService {
       ? `The post was written by ${postContent.author}${postContent.authorTitle ? ` (${postContent.authorTitle})` : ''}${postContent.authorCompany ? ` at ${postContent.authorCompany}` : ''}.` 
       : '';
     
-    // Image context
-    const imageContext = postContent.images && postContent.images.length > 0
-      ? `The post includes ${postContent.images.length} image(s).`
-      : 'The post does not include any images.';
+    // Enhanced image context with detailed instructions
+    let imageContext = '';
+    if (postContent.images && postContent.images.length > 0) {
+      const imageCount = postContent.images.length;
+      const imageWord = imageCount === 1 ? 'image' : 'images';
+      
+      imageContext = `The post includes ${imageCount} ${imageWord}. `;
+      
+      if (postContent.postType === 'image') {
+        imageContext += `This is primarily an image-focused post. Please analyze the visual content carefully. `;
+      }
+      
+      imageContext += `When analyzing the ${imageWord}, consider:
+- The main subject(s) or focal point(s)
+- Any text visible in the ${imageWord}
+- The overall context and how it relates to the post text
+- Professional relevance of the visual content
+- Emotional tone conveyed by the ${imageWord}
+
+Incorporate your observations about the ${imageWord} naturally into your comment when relevant. You don't need to describe the ${imageWord} explicitly unless it adds value to your comment. Focus on connecting the visual content to your main points.`;
+    } else {
+      imageContext = 'The post does not include any images.';
+    }
     
     // Post type context
     const postTypeContext = postContent.postType
@@ -349,6 +721,19 @@ export class CommentGenerationService {
     // Engagement-focused formatting 
     const formattingGuidance = 'Use spacing and structure to enhance readability. For longer comments, use paragraph breaks at logical points to make the comment scannable. If listing multiple points, use a dash or bullet format.';
     
+    // Media-specific context - how to handle image content
+    let mediaSpecificGuidance = '';
+    if (postContent.images && postContent.images.length > 0) {
+      mediaSpecificGuidance = `
+For image content:
+- If you recognize specific objects, scenes, text, people, or concepts in the images, refer to them naturally in your comment
+- Don't say "I can see in the image..." or "The image shows..." - instead incorporate observations seamlessly
+- If the image contains text that provides additional context, consider that in your response
+- For professional headshots or personal images, focus on the professional context rather than appearance
+- For charts, graphs, or infographics, comment on the insights they convey
+- Keep image references subtle and natural unless the post is primarily about the image`;
+    }
+    
     // Construct the enhanced prompt
     return `
       You are a professional LinkedIn user creating a thoughtful comment on the following post:
@@ -382,6 +767,7 @@ export class CommentGenerationService {
       11. ${formattingGuidance}
       12. ${emojiGuidanceDetail}
       13. For longer comments (medium, long, very_long), include an attention-grabbing opener and a memorable closing statement
+      ${mediaSpecificGuidance}
       
       Return only the comment text without any additional formatting, explanations, or quotation marks.
     `.trim();
