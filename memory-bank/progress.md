@@ -19,21 +19,21 @@
   - Icon-based buttons for cleaner interface
   - Enhanced comment formatting for better readability
 - Image content processing functionality (partial):
-  - ✅ Image detection and extraction from LinkedIn posts
-  - ✅ API integration for image processing with Gemini API
-  - ✅ Advanced prompt engineering for different image types
+  - ✅ Image detection and extraction from LinkedIn posts (Sub-Step 18.1)
+  - ✅ API integration for image processing with Gemini API (Sub-Step 18.2)
+  - ✅ Advanced prompt engineering for different image types (Sub-Step 18.3)
 
 ## What's Left to Build
-- Image content processing functionality (Step 17)
-  - ❌ UI updates for image processing feedback (Step 17.4 - in progress)
-- Enhanced error handling with user-friendly messages (Step 18)
-- Performance optimizations for smoother experience (Step 19)
-- Final visual polish and feedback mechanisms (Step 20)
-- Extensibility framework for future features (Step 21)
-- End-to-end testing and packaging for Chrome Web Store (Step 22)
+- Image content processing functionality (Step 18)
+  - ❌ UI updates for image processing feedback (Sub-Step 18.4 - in progress)
+- Enhanced error handling with user-friendly messages (Step 19)
+- Performance optimizations for smoother experience (Step 20)
+- Final visual polish and feedback mechanisms (Step 21)
+- Extensibility framework for future features (Step 22)
+- End-to-end testing and packaging for Chrome Web Store (Step 23)
 
 ## Current Status
-The project has implemented all core functionality for the LinkedIn comment generation feature. We've completed steps 1-17.3 of the development plan, including project setup, LinkedIn integration, AI integration, and initial UI/UX improvements. We're currently working on implementing UI updates for image processing feedback (Step 17.4) before moving into Phase 4 (Robustness & Polish).
+The project has implemented all core functionality for the LinkedIn comment generation feature. We've completed Steps 1-16 and Sub-Steps 18.1-18.3 of the development plan, including project setup, LinkedIn integration, AI integration, and initial UI/UX improvements. We're currently working on implementing UI updates for image processing feedback (Sub-Step 18.4) before moving into Phase 4 (Robustness & Polish).
 
 ## Known Issues
 - Image processing UI feedback not yet implemented
