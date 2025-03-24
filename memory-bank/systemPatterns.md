@@ -67,3 +67,26 @@ The EngageIQ Chrome extension follows a modular architecture with clear separati
   - StorageService manages preferences and API keys
   - DOMUtils provides utility methods for LinkedIn DOM manipulation
   - LogService provides consistent logging throughout the extension
+
+## Planned Refactoring
+The codebase is scheduled for refactoring according to SOLID principles to improve maintainability and extensibility:
+
+- **Single Responsibility Principle**: Refactoring services to have a single, well-defined responsibility
+  - Breaking down CommentGenerationService into specialized services
+  - Creating dedicated services for prompt generation, image processing, and comment formatting
+
+- **Open/Closed Principle**: Making services extensible without modification
+  - Defining clear interfaces for all services
+  - Using dependency injection to allow for different implementations
+
+- **Liskov Substitution Principle**: Ensuring implementations are substitutable for their interfaces
+  - Creating proper inheritance hierarchies for services
+  - Ensuring child classes respect the contracts of parent classes
+
+- **Interface Segregation**: Creating focused interfaces rather than general-purpose ones
+  - Breaking down large interfaces into smaller, more specific ones
+  - Ensuring components only depend on interfaces they actually use
+
+- **Dependency Inversion**: Making high-level modules depend on abstractions
+  - Enhancing ServiceFactory to better manage dependencies
+  - Implementing proper lifecycle management for services
