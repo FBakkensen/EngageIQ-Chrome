@@ -366,7 +366,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 - Create comprehensive test coverage before refactoring
 - Refactor services one at a time with focus on maintainability and extensibility
 
-**❌ Sub-Step 17.1: Service Analysis and Planning**
+**✅ Sub-Step 17.1: Service Analysis and Planning**
 **Tasks:**
 - Create a service inventory documenting all services, responsibilities, and dependencies
 - Identify services that violate SOLID principles (particularly Single Responsibility)
@@ -386,78 +386,82 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 
 **❌ Sub-Step 17.2: Establish Test Infrastructure**
 **Tasks:**
-- Implement unit testing framework for services
-- Create mocks for external dependencies (Chrome API, Gemini API)
-- Set up integration tests for service interactions
-- Add end-to-end tests for critical user flows
-- Establish test coverage baselines
+- Set up Jest configuration for unit testing services
+- Create test directory structure (src/__tests__ or tests/)
+- Implement mock framework for Chrome API (using jest.mock)
+- Create Gemini API mocks for testing API integration
+- Develop test utilities for common testing patterns
+- Establish test coverage baseline and reporting
+- Add initial tests for highest priority services (CommentGenerationService, ServiceFactory)
 
 **Verification:**
-1. Run unit tests for critical services to verify functionality
-2. Check test coverage meets minimum threshold (e.g., 80%)
-3. Verify mocks properly simulate external dependencies
-4. Confirm integration tests validate service interactions
-5. Test that E2E tests capture main user workflows
+1. Confirm Jest runs and reports test results correctly
+2. Verify mocks properly simulate Chrome and Gemini APIs
+3. Ensure test coverage meets minimum threshold (70%)
+4. Confirm tests properly validate current behavior of services
+
+**Next Sub-Step:** Enhance ServiceFactory for better dependency management.
+
+---
+
+**❌ Sub-Step 17.3: Enhance ServiceFactory for Dependency Management**
+**Tasks:**
+- Create interfaces for all services managed by ServiceFactory
+- Implement service registration mechanism to register implementations
+- Add support for lazy initialization of services
+- Implement proper lifecycle management (creation, caching, disposal)
+- Add testing mode to inject mock implementations
+- Update existing code to use the enhanced ServiceFactory
+
+**Verification:**
+1. Verify all services can be accessed through ServiceFactory
+2. Test mock service registration for testing
+3. Confirm lazy loading behavior works correctly
+4. Check service lifecycle management functions properly
+5. Ensure backward compatibility with existing code
 
 **Next Sub-Step:** Refactor core services.
 
 ---
 
-**❌ Sub-Step 17.3: Refactor Core Services**
+**❌ Sub-Step 17.4: Refactor CommentGenerationService**
 **Tasks:**
-- Refactor CommentGenerationService into smaller, focused services:
-  - Create PromptGenerationService for handling prompt creation
-  - Create ImageProcessingService for image handling
-  - Create GeminiAPIService for API communication
-  - Create CommentFormattingService for output formatting
-- Update service factory to provide new service implementations
-- Ensure backward compatibility with existing code
-- Update documentation to reflect new service architecture
+- Create interfaces for new services:
+  - IPromptGenerationService
+  - IGeminiApiService
+  - ICommentFormattingService
+  - IImageProcessingService
+- Implement each service with focused responsibilities
+- Update ServiceFactory to provide new service implementations
+- Modify existing code to use the new services
+- Add comprehensive tests for each new service
 
 **Verification:**
 1. Run tests to verify refactored services maintain same behavior
-2. Check that refactored code follows Single Responsibility Principle
-3. Verify services use dependency injection for testability
-4. Confirm that client code continues to function with new services
-5. Test performance to ensure refactoring doesn't introduce overhead
+2. Check that each service follows Single Responsibility Principle
+3. Verify services use dependency injection through ServiceFactory
+4. Confirm no functionality regressions in end-to-end testing
+5. Test error handling in each service
 
 **Next Sub-Step:** Refactor UI components.
 
 ---
 
-**❌ Sub-Step 17.4: Refactor UI Components**
+**❌ Sub-Step 17.5: Refactor UI Components with Service-Like Behavior**
 **Tasks:**
-- Extract business logic from UI components (CommentFieldEnhancer, CommentDisplay)
-- Create dedicated service for post content extraction
+- Extract business logic from CommentFieldEnhancer into dedicated services
+- Create PostContentExtractionService for separating UI from content parsing
 - Break down large UI components into smaller, focused components
-- Implement proper dependency injection for UI components
+- Apply dependency injection pattern to UI components
 - Ensure clear separation between UI and business logic
+- Add tests for extracted services and UI components
 
 **Verification:**
 1. Test UI components with mock services to verify functionality
-2. Check UI rendering in different contexts (light/dark mode, various layouts)
+2. Check UI rendering in different contexts (light/dark mode)
 3. Verify event handling works correctly after refactoring
 4. Test performance of UI components after refactoring
 5. Confirm UI behavior matches pre-refactoring baseline
-
-**Next Sub-Step:** Enhance dependency management.
-
----
-
-**❌ Sub-Step 17.5: Enhance Dependency Management**
-**Tasks:**
-- Update ServiceFactory to support lazy initialization of services
-- Implement proper lifecycle management for services
-- Add capability to register custom service implementations
-- Support testing mode with mock services
-- Create interfaces for all services that lack them
-
-**Verification:**
-1. Verify all services are properly accessed through ServiceFactory
-2. Test custom service implementation registration
-3. Check lazy loading behavior improves performance
-4. Confirm mock services can be substituted for testing
-5. Test service lifecycle management (creation, caching, disposal)
 
 **Next Step:** Add image content processing
 
