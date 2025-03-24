@@ -360,15 +360,85 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 ---
 
 ### ❌ Step 17: Add Image Content Processing
+
+**❌ Sub-Step 17.1: Image Detection and Extraction**
 **Tasks:**
-- Enhance post extraction to handle images
-- Update API integration for image processing
-- Modify prompts to incorporate image context
+- Enhance the post content extraction logic to identify image elements in LinkedIn posts
+- Implement methods to extract image URLs or base64 data from post DOM
+- Handle different types of LinkedIn image posts (single image, carousel, etc.)
+- Create fallback mechanisms for when image data cannot be extracted
+- Implement validation to ensure extracted image data is valid
+- Add logging for debugging image extraction process
 
 **Verification:**
-1. Test with posts containing images
-2. Verify image context is reflected in generated comments
-3. Check handling of posts with multiple images
+1. Visit LinkedIn posts containing images and verify images are correctly detected
+2. Test with different image post types (single image, multiple images, carousel)
+3. Check console logs to confirm proper image data extraction
+4. Verify handling of posts that contain both text and images
+5. Test error handling for invalid or inaccessible images
+
+**Next Sub-Step:** API Integration for Image Processing.
+
+---
+
+**❌ Sub-Step 17.2: API Integration for Image Processing**
+**Tasks:**
+- Update the Gemini API service to handle image data in requests
+- Implement request formatting for multimodal inputs (text + images)
+- Add proper error handling for image processing API requests
+- Optimize image data transmission (resizing, compression) if needed
+- Create caching mechanisms for processed image results to improve performance
+- Update API response parsing to handle image-aware responses
+
+**Verification:**
+1. Test API requests with posts containing images
+2. Verify the API receives and processes image data correctly
+3. Check handling of different image formats and sizes
+4. Test error handling for API failures with image data
+5. Verify response contains appropriate image-aware content
+6. Measure and optimize performance for image processing requests
+
+**Next Sub-Step:** Prompt Engineering for Image Context.
+
+---
+
+**❌ Sub-Step 17.3: Prompt Engineering for Image Context**
+**Tasks:**
+- Modify prompt templates to incorporate image context information
+- Create specialized prompts for different image types (product images, people, infographics, etc.)
+- Implement context-aware prompt generation that combines text and image insights
+- Develop prompting strategies for handling multiple images in a single post
+- Add instructions in prompts for balancing text content and image content
+- Create fallback prompting strategies when image analysis is limited or unavailable
+
+**Verification:**
+1. Test generated prompts with various image types
+2. Verify prompts effectively combine text and image context
+3. Check generated comments for relevance to both text and image content
+4. Test handling of posts with multiple images
+5. Verify prompts degrade gracefully when image context is limited
+
+**Next Sub-Step:** UI Updates and Testing for Image Processing.
+
+---
+
+**❌ Sub-Step 17.4: UI Updates and Testing for Image Processing**
+**Tasks:**
+- Update the comment generation UI to indicate when image content is being processed
+- Add visual cues that show which images are being included in the analysis
+- Implement loading states specific to image processing (which may take longer)
+- Create UI elements to toggle image inclusion if needed
+- Update error messages to handle image-specific processing failures
+- Ensure the UI accurately reflects the additional context from images
+
+**Verification:**
+1. Test the complete workflow from image detection to comment generation
+2. Verify UI provides clear feedback about image processing status
+3. Check handling of posts with various combinations of text and images
+4. Test different LinkedIn post layouts to ensure consistent behavior
+5. Verify performance on slower connections where image processing may take longer
+6. Test compatibility with both light and dark modes
+7. Ensure the enhanced functionality doesn't disrupt existing features
 
 **Next Step:** Enhance error handling
 
