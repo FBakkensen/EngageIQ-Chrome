@@ -392,7 +392,7 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 - Configure TypeScript support with ts-jest
 - Set up module mapping for import aliases (@/ prefix)
 - Configure test environment (jsdom for UI components, node for services)
-- Configure Jest to handle Chrome API mocking
+- Configure Chrome API mocking
 - Add test matching patterns
 
 **Verification:**
@@ -400,6 +400,199 @@ This development plan breaks down the implementation of the EngageIQ Chrome Exte
 2. TypeScript files are properly transpiled during testing
 3. Import aliases work correctly in test files
 4. Jest can find and run test files according to the configured patterns
+
+**Next Sub-Step:** Create test directory structure.
+
+---
+
+**✓ Sub-Step 17.2.1.1: Create Basic Jest Config with TypeScript Support**
+**Tasks:**
+- Create the initial jest.config.js in the project root
+- Configure TypeScript support with ts-jest
+- Set up basic transform patterns for TypeScript files
+
+**Implementation:**
+```javascript
+// jest.config.js
+module.exports = {
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  transform: {
+    '^.+\\.tsx?$': ['ts-jest', {
+      tsconfig: 'tsconfig.json',
+    }],
+  },
+};
+```
+
+**Verification:**
+1. Create a simple TypeScript test file (e.g., `tests/setup.test.ts`)
+2. Run `npm test` to verify TypeScript compilation works
+3. Check that Jest can recognize and run the test file
+
+**Potential Challenges:**
+- Ensuring TypeScript version compatibility with ts-jest
+- Handling any custom TypeScript configuration in the project
+
+**Next Sub-Step:** Configure module aliases and paths.
+
+---
+
+**✓ Sub-Step 17.2.1.2: Configure Module Aliases and Paths**
+**Tasks:**
+- Set up moduleNameMapper to handle the @/ import alias
+- Configure paths to match tsconfig.json settings
+- Ensure proper handling of CSS/asset imports in tests
+
+**Implementation:**
+```javascript
+// jest.config.js (updated)
+module.exports = {
+  // ... previous config
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+    '\\.(css|less|scss|sass)$': '<rootDir>/tests/mocks/styleMock.js',
+    '\\.(jpg|jpeg|png|gif|webp|svg)$': '<rootDir>/tests/mocks/fileMock.js',
+  },
+};
+```
+
+**Verification:**
+1. Create a test file that imports using the @/ alias
+2. Run the test to verify the import resolution works
+3. Try importing different types of files to verify proper mapping
+
+**Potential Challenges:**
+- Matching the exact path mapping from tsconfig.json
+- Dealing with various import types (CSS, images, etc.)
+
+**Next Sub-Step:** Set up test environments.
+
+---
+
+**✓ Sub-Step 17.2.1.3: Set Up Test Environments**
+**Tasks:**
+- Configure separate test environments for different test types
+- Set up jsdom for UI component testing
+- Configure node environment for service/utility testing
+
+**Implementation:**
+```javascript
+// jest.config.js (updated)
+module.exports = {
+  // ... previous config
+  projects: [
+    {
+      displayName: 'DOM',
+      testMatch: ['<rootDir>/src/**/*.spec.tsx', '<rootDir>/tests/ui/**/*.test.ts?(x)'],
+      testEnvironment: 'jsdom',
+      setupFilesAfterEnv: ['<rootDir>/tests/setup-dom.js'],
+    },
+    {
+      displayName: 'NODE',
+      testMatch: ['<rootDir>/src/**/*.spec.ts', '<rootDir>/tests/services/**/*.test.ts'],
+      testEnvironment: 'node',
+      setupFilesAfterEnv: ['<rootDir>/tests/setup-node.js'],
+    },
+  ],
+};
+```
+
+**Verification:**
+1. Create a UI component test that requires DOM features
+2. Create a service test that doesn't need DOM
+3. Verify both tests run in their appropriate environments
+
+**Potential Challenges:**
+- Correctly categorizing tests for appropriate environments
+- Ensuring test environment-specific setup doesn't conflict
+
+**Next Sub-Step:** Configure Chrome API mocking.
+
+---
+
+**✓ Sub-Step 17.2.1.4: Configure Chrome API Mocking**
+**Tasks:**
+- Set up jest.mock for Chrome APIs
+- Create basic Chrome API mock implementations
+- Configure test setup files for extension API mocking
+
+**Implementation:**
+```javascript
+// tests/setup-chrome.js
+global.chrome = {
+  storage: {
+    local: {
+      get: jest.fn(),
+      set: jest.fn(),
+      clear: jest.fn(),
+    },
+    sync: {
+      get: jest.fn(),
+      set: jest.fn(),
+      clear: jest.fn(),
+    },
+  },
+  runtime: {
+    sendMessage: jest.fn(),
+    onMessage: {
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+    },
+  },
+  tabs: {
+    query: jest.fn(),
+    sendMessage: jest.fn(),
+  },
+};
+```
+
+**Verification:**
+1. Create a test file that uses Chrome APIs
+2. Verify the test runs without "chrome is not defined" errors
+3. Test that mock implementations return expected values
+
+**Potential Challenges:**
+- Covering all necessary Chrome APIs used in the extension
+- Ensuring mocks behave similarly to real Chrome APIs
+
+**Next Sub-Step:** Configure test discovery and patterns.
+
+---
+
+**✓ Sub-Step 17.2.1.5: Configure Test Discovery and Patterns**
+**Tasks:**
+- Set testMatch patterns to find appropriate test files
+- Configure coverage collection settings
+- Set up test reporting formats
+
+**Implementation:**
+```javascript
+// jest.config.js (updated)
+module.exports = {
+  // ... previous config
+  collectCoverage: true,
+  collectCoverageFrom: [
+    'src/**/*.{ts,tsx}',
+    '!src/**/*.d.ts',
+    '!src/**/*.stories.{ts,tsx}',
+    '!src/index.ts',
+  ],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov'],
+  testTimeout: 10000,
+  verbose: true,
+};
+```
+
+**Verification:**
+1. Place test files in different locations
+2. Run `npm test` to verify all test files are discovered
+3. Check that coverage reporting works
+
+**Potential Challenges:**
+- Finding the right balance for test file organization
+- Setting appropriate coverage thresholds
 
 **Next Sub-Step:** Create test directory structure.
 
