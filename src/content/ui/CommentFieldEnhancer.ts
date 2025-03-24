@@ -1010,7 +1010,7 @@ export class CommentFieldEnhancer {
   /**
    * Extract content from the post containing this comment field
    */
-  private extractPostContent(field: HTMLElement): any {
+  private extractPostContent(field: HTMLElement): EngageIQ.PostContent {
     // Find closest post containing this comment field
     const post = field.closest('.feed-shared-update-v2') || 
                 field.closest('article') || 
@@ -1033,14 +1033,228 @@ export class CommentFieldEnhancer {
     
     const author = authorElement ? authorElement.textContent?.trim() : 'Unknown author';
     
-    this.logger.info('Extracted post content:', { author, text });
+    // Extract images from post
+    const images = this.extractImagesFromPost(post as HTMLElement);
+    
+    // Determine post type based on content
+    const postType = this.determinePostType(post as HTMLElement, images.length > 0);
+    
+    this.logger.info('Extracted post content:', { 
+      author, 
+      text: text?.substring(0, 50) + (text && text.length > 50 ? '...' : ''),
+      imageCount: images.length,
+      postType
+    });
     
     return {
       author,
       text: text || 'No text content found', // Ensure text is never undefined
       url: window.location.href,
-      postType: 'post' // Add a default post type 
+      postType,
+      images: images.length > 0 ? images : undefined
     };
+  }
+  
+  /**
+   * Extract images from a LinkedIn post
+   * @param post The post element
+   * @returns Array of image URLs
+   */
+  private extractImagesFromPost(post: HTMLElement): string[] {
+    const images: string[] = [];
+    
+    try {
+      // Track extraction attempts for logging
+      let attemptedExtractions = 0;
+      let successfulExtractions = 0;
+      
+      // Common image container selectors in LinkedIn posts
+      const imageContainerSelectors = [
+        // Single image posts
+        '.feed-shared-image__container',
+        '.feed-shared-image',
+        '.feed-shared-update-v2__content .feed-shared-image',
+        // Articles with preview images
+        '.feed-shared-article__preview-image',
+        // Carousels
+        '.feed-shared-carousel-slide__content',
+        '.feed-shared-carousel__slide',
+        // Videos with thumbnail
+        '.feed-shared-update-v2__content .feed-shared-external-video__container',
+        '.feed-shared-update-v2__content .feed-shared-linkedin-video__container',
+        // Documents/PDFs
+        '.feed-shared-document__container',
+        // Generic image selectors (fallbacks)
+        'img[src*="media.licdn.com"]',
+        'img[data-ghost-url]',
+        'img[data-delayed-url]',
+        'img[src*="media-exp"]'
+      ];
+      
+      // Try each selector
+      imageContainerSelectors.forEach(selector => {
+        try {
+          const imageContainers = post.querySelectorAll(selector);
+          attemptedExtractions += imageContainers.length;
+          
+          Array.from(imageContainers).forEach((container) => {
+            // Try to extract the image URL
+            const imageUrl = this.extractImageUrl(container as HTMLElement);
+            
+            if (imageUrl && this.isValidImageUrl(imageUrl)) {
+              // Don't add duplicate URLs
+              if (!images.includes(imageUrl)) {
+                images.push(imageUrl);
+                successfulExtractions++;
+              }
+            }
+          });
+        } catch (e) {
+          this.logger.warn(`Error finding images with selector "${selector}":`, e);
+        }
+      });
+      
+      // Also look for background images in various elements
+      const backgroundImageContainers = post.querySelectorAll('[style*="background-image"]');
+      attemptedExtractions += backgroundImageContainers.length;
+      
+      Array.from(backgroundImageContainers).forEach((container) => {
+        try {
+          const style = window.getComputedStyle(container as HTMLElement);
+          const backgroundImage = style.backgroundImage;
+          
+          if (backgroundImage && backgroundImage !== 'none') {
+            // Extract URL from "url('...')" format
+            const match = backgroundImage.match(/url\(['"]?(.*?)['"]?\)/);
+            
+            if (match && match[1]) {
+              const imageUrl = match[1];
+              
+              if (this.isValidImageUrl(imageUrl) && !images.includes(imageUrl)) {
+                images.push(imageUrl);
+                successfulExtractions++;
+              }
+            }
+          }
+        } catch (e) {
+          this.logger.warn('Error extracting background image:', e);
+        }
+      });
+      
+      this.logger.info('Image extraction stats:', {
+        attempted: attemptedExtractions,
+        successful: successfulExtractions,
+        unique: images.length
+      });
+    } catch (e) {
+      this.logger.error('Error extracting images from post:', e);
+    }
+    
+    return images;
+  }
+  
+  /**
+   * Extract image URL from an element
+   * @param element The element containing image
+   * @returns The image URL or null if not found
+   */
+  private extractImageUrl(element: HTMLElement): string | null {
+    try {
+      // Check if element is an img tag
+      if (element.tagName === 'IMG') {
+        // Try multiple attributes where the URL might be stored
+        const urlAttributes = ['src', 'data-src', 'data-delayed-url', 'data-ghost-url'];
+        
+        for (const attr of urlAttributes) {
+          const url = element.getAttribute(attr);
+          if (url) return url;
+        }
+      }
+      
+      // Check for img child
+      const img = element.querySelector('img');
+      if (img) {
+        const urlAttributes = ['src', 'data-src', 'data-delayed-url', 'data-ghost-url'];
+        
+        for (const attr of urlAttributes) {
+          const url = img.getAttribute(attr);
+          if (url) return url;
+        }
+      }
+      
+      // Check for background-image style
+      const style = window.getComputedStyle(element);
+      const backgroundImage = style.backgroundImage;
+      
+      if (backgroundImage && backgroundImage !== 'none') {
+        const match = backgroundImage.match(/url\(['"]?(.*?)['"]?\)/);
+        if (match && match[1]) return match[1];
+      }
+      
+      // Check data attributes that might contain image URLs
+      const dataLiImageUrl = element.getAttribute('data-li-image-url');
+      if (dataLiImageUrl) return dataLiImageUrl;
+      
+      return null;
+    } catch (e) {
+      this.logger.warn('Error extracting image URL:', e);
+      return null;
+    }
+  }
+  
+  /**
+   * Validate if a string is a valid image URL
+   * @param url The URL to validate
+   * @returns Whether the URL is valid
+   */
+  private isValidImageUrl(url: string): boolean {
+    // Basic URL validation
+    try {
+      new URL(url);
+    } catch {
+      return false;
+    }
+    
+    // Check if it's a LinkedId media URL
+    const isLinkedInMediaUrl = url.includes('media.licdn.com') || 
+                             url.includes('media-exp') || 
+                             url.includes('dms.licdn.com');
+    
+    // Check file extension for common image types
+    const hasImageExtension = /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(url);
+    
+    return isLinkedInMediaUrl || hasImageExtension;
+  }
+  
+  /**
+   * Determine the post type based on content
+   * @param post The post element
+   * @param hasImages Whether the post has images
+   * @returns The post type
+   */
+  private determinePostType(post: HTMLElement, hasImages: boolean): EngageIQ.PostContent['postType'] {
+    // Check for specific post type indicators
+    const hasArticle = !!post.querySelector('.feed-shared-article');
+    const hasDocument = !!post.querySelector('.feed-shared-document');
+    const hasVideo = !!post.querySelector('.feed-shared-linkedin-video') || 
+                   !!post.querySelector('.feed-shared-external-video');
+    const hasPoll = !!post.querySelector('.feed-shared-poll');
+    const hasEvent = !!post.querySelector('.feed-shared-event');
+    const hasJob = !!post.querySelector('.feed-shared-job');
+    const hasCarousel = !!post.querySelector('.feed-shared-carousel');
+    const hasShare = !!post.querySelector('.feed-shared-update-v2__reshared-content-container');
+    
+    // Determine type based on hierarchy (most specific to most general)
+    if (hasJob) return 'job';
+    if (hasEvent) return 'event';
+    if (hasPoll) return 'poll';
+    if (hasDocument) return 'document';
+    if (hasVideo) return 'video';
+    if (hasArticle) return 'article';
+    if (hasShare) return 'share';
+    if (hasCarousel || hasImages) return 'image';
+    
+    return 'text';
   }
   
   /**
