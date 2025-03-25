@@ -616,6 +616,109 @@ module.exports = {
 
 ---
 
+**❌ Sub-Step 17.2.2.1: Define Core Test Directory Structure**
+**Tasks:**
+- Create a complete directory structure that mirrors the src/ hierarchy
+- Add .gitkeep files to empty directories to preserve structure
+- Create a directory map document for reference
+- Add placeholder test files (*.test.ts) in each directory
+
+**Verification:**
+1. Run `ls -la tests` to verify directory structure
+2. Compare structure with src/ directories using `find` commands
+3. Run a test to ensure Jest recognizes the structure
+4. Verify test placeholders are properly detected
+
+**Estimated Time:** 1 hour
+
+**Next Sub-Step:** Create mock implementation directories.
+
+---
+
+**❌ Sub-Step 17.2.2.2: Create Mock Implementation Structure**
+**Tasks:**
+- Expand mocks/ directory with subdirectories for:
+  * mocks/chrome/ (Chrome API mocks by category)
+  * mocks/dom/ (LinkedIn DOM element mocks)
+  * mocks/api/ (Gemini API and other API mocks)
+  * mocks/services/ (Mock service implementations)
+- Create index.ts files in each mock directory for easy importing
+- Add basic mock implementations as examples
+
+**Verification:**
+1. Verify directory structure is created
+2. Test import statements work from a sample test file
+3. Create a simple test that uses mocks from each category
+4. Run test to verify mocks are properly configured
+
+**Estimated Time:** 1.5 hours
+
+**Next Sub-Step:** Implement test utilities structure.
+
+---
+
+**❌ Sub-Step 17.2.2.3: Implement Test Utilities Structure**
+**Tasks:**
+- Create utils/ directory with subdirectories:
+  * utils/factories/ (Test factory functions)
+  * utils/fixtures/ (Test data fixtures)
+  * utils/helpers/ (Testing helper functions)
+  * utils/test-renderers/ (Component rendering utilities)
+- Add basic utility functions and helper files
+- Create README.md with usage examples
+
+**Verification:**
+1. Verify directory structure is created
+2. Import utilities in a sample test file
+3. Create a test that uses the provided utilities
+4. Run test to verify utilities work correctly
+
+**Estimated Time:** 2 hours
+
+**Next Sub-Step:** Add comprehensive test documentation.
+
+---
+
+**❌ Sub-Step 17.2.2.4: Add Comprehensive Test Documentation**
+**Tasks:**
+- Create main tests/README.md with overall structure explanation
+- Add README.md files to each major directory
+- Create CONTRIBUTING.md with testing guidelines
+- Add example test files in each directory
+- Document best practices for each test type
+
+**Verification:**
+1. Verify README files exist in each directory
+2. Check that documentation is accurate and helpful
+3. Ensure examples match the actual testing patterns
+4. Have another team member review documentation
+
+**Estimated Time:** 2 hours
+
+**Next Sub-Step:** Set up CI test configuration.
+
+---
+
+**❌ Sub-Step 17.2.2.5: Set Up CI Test Configuration**
+**Tasks:**
+- Create ci/ directory for CI-specific configurations
+- Add test reporters for CI environment
+- Configure coverage reporting for CI
+- Update package.json scripts for CI testing
+- Add CI workflow documentation
+
+**Verification:**
+1. Verify CI directory structure exists
+2. Test CI scripts locally
+3. Check that coverage reporting works in CI mode
+4. Ensure all tests can be run in a CI-like environment
+
+**Estimated Time:** 1.5 hours
+
+**Next Sub-Step:** Implement mock frameworks.
+
+---
+
 **❌ Sub-Step 17.2.3: Implement Mock Frameworks**
 **Tasks:**
 - Create Chrome API mocks for common extension APIs (storage, runtime, tabs)
