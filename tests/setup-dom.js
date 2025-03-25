@@ -53,4 +53,61 @@ afterEach(() => {
   if (global.resetChromeMocks) {
     global.resetChromeMocks();
   }
-}); 
+});
+
+// Jest setup file for DOM environment (UI tests)
+
+// Import any required DOM testing libraries
+// require('@testing-library/jest-dom');
+
+// Mock window.matchMedia for responsive component testing
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: jest.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: jest.fn(),
+    removeListener: jest.fn(),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    dispatchEvent: jest.fn(),
+  })),
+});
+
+// Mock window.scrollTo
+window.scrollTo = jest.fn();
+
+// Mock Chrome API
+global.chrome = {
+  storage: {
+    local: {
+      get: jest.fn(),
+      set: jest.fn(),
+      clear: jest.fn(),
+    },
+    sync: {
+      get: jest.fn(),
+      set: jest.fn(),
+      clear: jest.fn(),
+    },
+  },
+  runtime: {
+    sendMessage: jest.fn(),
+    onMessage: {
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+    },
+  },
+  tabs: {
+    query: jest.fn(),
+    sendMessage: jest.fn(),
+  },
+};
+
+// Reset all mocks after each test
+afterEach(() => {
+  jest.clearAllMocks();
+});
+
+console.log('DOM environment setup complete'); 

@@ -4,15 +4,35 @@
 // Import Chrome API mocks
 require('./setup-chrome');
 
-// Mock fetch API for Gemini API calls
-global.fetch = jest.fn(() => 
-  Promise.resolve({
-    json: () => Promise.resolve({}),
-    ok: true,
-    status: 200,
-    statusText: 'OK',
-  })
-);
+// Mock Chrome API in Node environment
+global.chrome = {
+  storage: {
+    local: {
+      get: jest.fn(),
+      set: jest.fn(),
+      clear: jest.fn(),
+    },
+    sync: {
+      get: jest.fn(),
+      set: jest.fn(),
+      clear: jest.fn(),
+    },
+  },
+  runtime: {
+    sendMessage: jest.fn(),
+    onMessage: {
+      addListener: jest.fn(),
+      removeListener: jest.fn(),
+    },
+  },
+  tabs: {
+    query: jest.fn(),
+    sendMessage: jest.fn(),
+  },
+};
+
+// Mock fetch API for service tests
+global.fetch = jest.fn();
 
 // Mock Gemini API responses
 global.geminiMocks = {
@@ -50,10 +70,13 @@ global.geminiMocks = {
   }
 };
 
-// Reset mocks after each test
+// Reset all mocks after each test
 afterEach(() => {
   if (global.resetChromeMocks) {
     global.resetChromeMocks();
   }
   global.fetch.mockClear();
-}); 
+  jest.clearAllMocks();
+});
+
+console.log('Node environment setup complete'); 
